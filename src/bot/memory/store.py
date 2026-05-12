@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -55,7 +57,6 @@ class MemoryStore:
 
     def save_attachment_metadata(self, filename: str, source_url: str) -> Path:
         self._ensure_state_files()
-        metadata_path = self.attachments_dir / f"{Path(filename).name}.json"
         content = (
             json.dumps(
                 {"filename": filename, "source_url": source_url},
@@ -63,6 +64,9 @@ class MemoryStore:
                 sort_keys=True,
             )
             + "\n"
+        )
+        metadata_path = self._unique_attachment_metadata_path(
+            filename, content, source_url
         )
         self._atomic_write(metadata_path, content)
         return metadata_path
@@ -91,14 +95,40 @@ class MemoryStore:
 
     def _load_runtime_state(self) -> RuntimeState:
         runtime_path = self.state_dir / "runtime_state.json"
-        data = json.loads(runtime_path.read_text(encoding="utf-8"))
-        return RuntimeState.from_json(data)
+        try:
+            data = json.loads(runtime_path.read_text(encoding="utf-8"))
+            return RuntimeState.from_json(data)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError, AttributeError):
+            state = RuntimeState()
+            self.save_runtime_state(state)
+            return state
 
     def _state_file(self, path_name: str) -> Path:
         path = self.state_dir / path_name
         if path.parent != self.state_dir:
             raise ValueError(f"memory path must be a state file name: {path_name}")
         return path
+
+    def _unique_attachment_metadata_path(
+        self, filename: str, content: str, source_url: str
+    ) -> Path:
+        basename = Path(filename).name or "attachment"
+        sanitized_basename = re.sub(r"[^A-Za-z0-9_.-]+", "_", basename).strip("._")
+        if not sanitized_basename:
+            sanitized_basename = "attachment"
+
+        url_hash = hashlib.sha256(source_url.encode("utf-8")).hexdigest()[:10]
+        stem = f"{sanitized_basename}-{url_hash}"
+        candidate = self.attachments_dir / f"{stem}.json"
+        counter = 1
+        while candidate.exists():
+            if candidate.read_text(encoding="utf-8") == content:
+                counter += 1
+                candidate = self.attachments_dir / f"{stem}-{counter}.json"
+                continue
+            counter += 1
+            candidate = self.attachments_dir / f"{stem}-{counter}.json"
+        return candidate
 
     def _atomic_write(self, path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -41,6 +41,23 @@ def test_memory_curator_rejects_blocked_secret_like_memory(tmp_path):
     assert "api key" not in snapshot.owner_profile.lower()
 
 
+def test_memory_curator_normalizes_multiline_updates_and_rejects_long_entries(tmp_path):
+    store = MemoryStore(tmp_path)
+    curator = MemoryCurator(store)
+
+    curator.apply_updates(
+        owner_profile_updates=[
+            "  # Owner\n- Likes   quiet\n\n  evenings.  ",
+            "x" * 501,
+        ]
+    )
+
+    snapshot = store.load_snapshot()
+    assert "- # Owner - Likes quiet evenings." in snapshot.owner_profile
+    assert "\n- Likes" not in snapshot.owner_profile
+    assert "x" * 501 not in snapshot.owner_profile
+
+
 def test_runtime_state_save_load_round_trips_key_fields(tmp_path):
     store = MemoryStore(tmp_path)
     last_owner_message_at = datetime(2026, 5, 13, 12, 30, tzinfo=timezone.utc)
@@ -54,6 +71,33 @@ def test_runtime_state_save_load_round_trips_key_fields(tmp_path):
     snapshot = store.load_snapshot()
     assert snapshot.runtime_state.last_owner_message_at == last_owner_message_at
     assert snapshot.runtime_state.unanswered_proactive_count == 3
+
+
+def test_runtime_state_load_degrades_gracefully_when_json_is_corrupt(tmp_path):
+    store = MemoryStore(tmp_path)
+    store.load_snapshot()
+    runtime_path = tmp_path / "runtime_state.json"
+    runtime_path.write_text("{not-json", encoding="utf-8")
+
+    snapshot = store.load_snapshot()
+
+    assert snapshot.runtime_state == RuntimeState()
+    assert runtime_path.read_text(encoding="utf-8").startswith("{")
+
+
+def test_attachment_metadata_uses_unique_paths_for_repeated_filenames(tmp_path):
+    store = MemoryStore(tmp_path)
+
+    first_path = store.save_attachment_metadata(
+        "portrait.png", "https://cdn.example.test/a/portrait.png"
+    )
+    second_path = store.save_attachment_metadata(
+        "portrait.png", "https://cdn.example.test/b/portrait.png"
+    )
+
+    assert first_path != second_path
+    assert first_path.is_file()
+    assert second_path.is_file()
 
 
 def test_memory_curator_skips_duplicate_updates(tmp_path):

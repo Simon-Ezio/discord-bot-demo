@@ -4,6 +4,9 @@ from bot.memory.store import MemoryStore
 from bot.safety import contains_blocked_memory_content
 
 
+MAX_MEMORY_ENTRY_LENGTH = 500
+
+
 class MemoryCurator:
     def __init__(self, store: MemoryStore):
         self.store = store
@@ -35,8 +38,12 @@ class MemoryCurator:
             entries: list[str] = []
             seen_content = existing_content[path_name]
             for update in updates or []:
-                value = update.strip()
-                if not value or contains_blocked_memory_content(value):
+                value = self._normalize_update(update)
+                if (
+                    not value
+                    or len(value) > MAX_MEMORY_ENTRY_LENGTH
+                    or contains_blocked_memory_content(value)
+                ):
                     continue
 
                 entry = f"- {value}"
@@ -47,3 +54,6 @@ class MemoryCurator:
                 seen_content += f"\n{entry}"
 
             self.store.append_markdown(path_name, entries)
+
+    def _normalize_update(self, update: str) -> str:
+        return " ".join(update.strip().split())
