@@ -164,6 +164,27 @@ def test_relationship_agent_falls_back_when_proactive_json_is_invalid():
     assert decision.skip_reason == "invalid_proactive_response"
 
 
+def test_relationship_agent_skips_true_proactive_decision_with_blank_message():
+    snapshot = make_snapshot()
+    snapshot.runtime_state.unanswered_proactive_count = 0
+    raw_response = json.dumps(
+        {
+            "should_send": True,
+            "reason": "Owner has been away.",
+            "message": "   ",
+            "skip_reason": "",
+        }
+    )
+    agent = RelationshipAgent(StubClient(raw_response), PromptBuilder("Mina"))
+
+    decision = asyncio.run(agent.plan_proactive(snapshot))
+
+    assert decision.should_send is False
+    assert decision.reason == "Owner has been away."
+    assert decision.message == ""
+    assert decision.skip_reason == "empty_proactive_message"
+
+
 def test_minimax_client_parses_mocked_choices_message_content_response():
     captured = {}
 

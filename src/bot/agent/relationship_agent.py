@@ -87,11 +87,20 @@ class RelationshipAgent:
         message = parsed.get("message")
         if not isinstance(message, str):
             message = ""
+        sanitized_message = sanitize_discord_output(message.strip())
+        reason = self._string_value(parsed.get("reason"))
+
+        if should_send and not sanitized_message:
+            return ProactiveDecision(
+                should_send=False,
+                reason=reason,
+                skip_reason="empty_proactive_message",
+            )
 
         return ProactiveDecision(
             should_send=should_send,
-            reason=self._string_value(parsed.get("reason")),
-            message=sanitize_discord_output(message.strip()),
+            reason=reason,
+            message=sanitized_message,
             skip_reason=self._string_value(parsed.get("skip_reason")),
         )
 
