@@ -5,6 +5,9 @@ from typing import Any
 import httpx
 
 
+DEFAULT_MINIMAX_MODEL = "MiniMax-Text-01"
+
+
 class MiniMaxClient:
     def __init__(
         self,
@@ -15,15 +18,13 @@ class MiniMaxClient:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url
-        self._model = model
+        self._model = model or DEFAULT_MINIMAX_MODEL
         self._timeout_seconds = timeout_seconds
         self._http_client = http_client
         self._headers = {"Authorization": f"Bearer {api_key}"}
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
-        payload: dict[str, Any] = {"messages": messages}
-        if self._model:
-            payload["model"] = self._model
+        payload: dict[str, Any] = {"messages": messages, "model": self._model}
 
         if self._http_client is not None:
             response = await self._http_client.post(
@@ -46,7 +47,14 @@ class MiniMaxClient:
 
     def _extract_text(self, data: Any) -> str:
         if not isinstance(data, dict):
-            return ""
+            raise RuntimeError("MiniMax response did not contain text")
+
+        base_resp = data.get("base_resp")
+        if isinstance(base_resp, dict):
+            status_code = base_resp.get("status_code")
+            if status_code not in (None, 0, "0"):
+                status_msg = base_resp.get("status_msg") or "unknown error"
+                raise RuntimeError(f"MiniMax API error {status_code}: {status_msg}")
 
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
@@ -55,16 +63,16 @@ class MiniMaxClient:
                 message = first_choice.get("message")
                 if isinstance(message, dict):
                     content = message.get("content")
-                    if isinstance(content, str):
+                    if isinstance(content, str) and content.strip():
                         return content
 
                 text = first_choice.get("text")
-                if isinstance(text, str):
+                if isinstance(text, str) and text.strip():
                     return text
 
         for key in ("reply", "output_text", "content"):
             value = data.get(key)
-            if isinstance(value, str):
+            if isinstance(value, str) and value.strip():
                 return value
 
-        return ""
+        raise RuntimeError("MiniMax response did not contain text")

@@ -3,8 +3,10 @@ import json
 from datetime import datetime, timezone
 
 import httpx
+import pytest
 
 from bot.agent import MiniMaxClient, PromptBuilder, RelationshipAgent
+from bot.agent.relationship_agent import FALLBACK_REPLY
 from bot.models import MemorySnapshot, MessageEvent, RuntimeState
 
 
@@ -105,6 +107,63 @@ def test_relationship_agent_sanitizes_reply_text():
     assert result.reply_text == "No need to ping @\u200beveryone."
 
 
+def test_relationship_agent_uses_fallback_reply_for_empty_raw_output():
+    agent = RelationshipAgent(StubClient("  "), PromptBuilder("Mina"))
+
+    result = asyncio.run(agent.respond(make_snapshot(), make_event()))
+
+    assert result.reply_text == FALLBACK_REPLY
+    assert result.bot_identity_updates == []
+
+
+def test_relationship_agent_plans_proactive_message_with_model():
+    snapshot = make_snapshot()
+    snapshot.runtime_state.unanswered_proactive_count = 0
+    raw_response = json.dumps(
+        {
+            "should_send": True,
+            "reason": "Owner has been quiet after a meaningful chat.",
+            "message": "Want to tell me how the puzzle settled, @here?",
+            "skip_reason": "",
+        }
+    )
+    client = StubClient(raw_response)
+    agent = RelationshipAgent(client, PromptBuilder("Mina"))
+
+    decision = asyncio.run(agent.plan_proactive(snapshot))
+
+    assert decision.should_send is True
+    assert decision.reason == "Owner has been quiet after a meaningful chat."
+    assert decision.message == "Want to tell me how the puzzle settled, @\u200bhere?"
+    assert decision.skip_reason == ""
+    prompt = "\n".join(message["content"] for message in client.messages)
+    assert "proactive" in prompt.lower()
+    assert "bot_identity" in prompt
+    assert "runtime_state" in prompt
+
+
+def test_relationship_agent_skips_proactive_planning_when_waiting_for_owner():
+    client = StubClient(json.dumps({"should_send": True, "message": "Hello"}))
+    agent = RelationshipAgent(client, PromptBuilder("Mina"))
+
+    decision = asyncio.run(agent.plan_proactive(make_snapshot()))
+
+    assert decision.should_send is False
+    assert decision.skip_reason == "waiting_for_owner_response"
+    assert client.messages is None
+
+
+def test_relationship_agent_falls_back_when_proactive_json_is_invalid():
+    snapshot = make_snapshot()
+    snapshot.runtime_state.unanswered_proactive_count = 0
+    agent = RelationshipAgent(StubClient("not-json"), PromptBuilder("Mina"))
+
+    decision = asyncio.run(agent.plan_proactive(snapshot))
+
+    assert decision.should_send is False
+    assert decision.skip_reason == "invalid_proactive_response"
+
+
 def test_minimax_client_parses_mocked_choices_message_content_response():
     captured = {}
 
@@ -139,3 +198,51 @@ def test_minimax_client_parses_mocked_choices_message_content_response():
     assert captured["authorization"] == "Bearer test-key"
     assert captured["payload"]["model"] == "abab6.5-chat"
     assert captured["payload"]["messages"] == [{"role": "user", "content": "Hello"}]
+
+
+def test_minimax_client_includes_default_model_when_model_is_empty():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content.decode("utf-8"))
+        return httpx.Response(200, json={"reply": "Hello from default model."})
+
+    async def run_client() -> str:
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as http_client:
+            client = MiniMaxClient(
+                api_key="test-key",
+                base_url="https://api.example.test/chat",
+                http_client=http_client,
+            )
+            return await client.complete([{"role": "user", "content": "Hello"}])
+
+    assert asyncio.run(run_client()) == "Hello from default model."
+    assert captured["payload"]["model"] == "MiniMax-Text-01"
+
+
+def test_minimax_client_raises_runtime_error_for_api_level_error():
+    client = MiniMaxClient(api_key="secret-key", base_url="https://api.example.test/chat")
+
+    with pytest.raises(RuntimeError) as error:
+        client._extract_text(
+            {
+                "base_resp": {
+                    "status_code": 1004,
+                    "status_msg": "insufficient balance",
+                }
+            }
+        )
+
+    assert "MiniMax API error 1004: insufficient balance" in str(error.value)
+    assert "secret-key" not in str(error.value)
+
+
+def test_minimax_client_raises_runtime_error_for_unrecognized_response_shape():
+    client = MiniMaxClient(api_key="secret-key", base_url="https://api.example.test/chat")
+
+    with pytest.raises(RuntimeError) as error:
+        client._extract_text({"unexpected": "shape"})
+
+    assert "MiniMax response did not contain text" in str(error.value)
+    assert "secret-key" not in str(error.value)
