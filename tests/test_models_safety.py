@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from bot.models import AttachmentInfo, MessageEvent
+from bot.models import AttachmentInfo, MessageEvent, RuntimeState
 from bot.safety import contains_blocked_memory_content, sanitize_discord_output
 
 
@@ -44,6 +44,47 @@ def test_message_event_represents_discord_message_details():
 )
 def test_attachment_info_identifies_images(attachment):
     assert attachment.is_image is True
+
+
+@pytest.mark.parametrize(
+    "attachment",
+    [
+        AttachmentInfo(filename="vector.svg", content_type=None),
+        AttachmentInfo(filename="vector.svg", content_type="image/svg+xml"),
+        AttachmentInfo(filename="vector.bin", content_type="image/svg+xml"),
+    ],
+)
+def test_attachment_info_rejects_svg_images(attachment):
+    assert attachment.is_image is False
+
+
+def test_runtime_state_json_round_trips_timestamps_and_notes():
+    last_owner_message_at = datetime(2026, 5, 13, 12, 30, tzinfo=timezone.utc)
+    last_proactive_sent_at = datetime(2026, 5, 13, 13, 45, tzinfo=timezone.utc)
+    state = RuntimeState(
+        last_owner_message_at=last_owner_message_at,
+        last_proactive_sent_at=last_proactive_sent_at,
+        unanswered_proactive_count=2,
+        last_proactive_reason="idle_check",
+        last_proactive_message="Want to chat?",
+    )
+
+    restored = RuntimeState.from_json(state.to_json())
+
+    assert restored == state
+
+
+def test_runtime_state_json_uses_defaults_for_missing_values():
+    restored = RuntimeState.from_json({})
+
+    assert restored == RuntimeState()
+    assert restored.to_json() == {
+        "last_owner_message_at": None,
+        "last_proactive_sent_at": None,
+        "unanswered_proactive_count": 0,
+        "last_proactive_reason": "",
+        "last_proactive_message": "",
+    }
 
 
 def test_sanitize_discord_output_neutralizes_mass_mentions():

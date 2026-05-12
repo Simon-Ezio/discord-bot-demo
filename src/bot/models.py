@@ -5,7 +5,17 @@ from datetime import datetime
 from typing import Any
 
 
-IMAGE_EXTENSIONS = {
+RASTER_IMAGE_CONTENT_TYPES = {
+    "image/apng",
+    "image/avif",
+    "image/bmp",
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+}
+
+RASTER_IMAGE_EXTENSIONS = {
     ".apng",
     ".avif",
     ".bmp",
@@ -13,7 +23,6 @@ IMAGE_EXTENSIONS = {
     ".jpeg",
     ".jpg",
     ".png",
-    ".svg",
     ".webp",
 }
 
@@ -27,11 +36,17 @@ class AttachmentInfo:
 
     @property
     def is_image(self) -> bool:
-        if self.content_type and self.content_type.lower().startswith("image/"):
+        if (
+            self.content_type
+            and self.content_type.lower().split(";", 1)[0].strip()
+            in RASTER_IMAGE_CONTENT_TYPES
+        ):
             return True
 
         filename = self.filename.lower()
-        return any(filename.endswith(extension) for extension in IMAGE_EXTENSIONS)
+        return any(
+            filename.endswith(extension) for extension in RASTER_IMAGE_EXTENSIONS
+        )
 
 
 @dataclass(frozen=True)
