@@ -2,7 +2,31 @@ from pathlib import Path
 
 import pytest
 
+import bot.config as config_module
 from bot.config import BotConfig, ConfigError
+
+
+CONFIG_ENV_VARS = (
+    "DISCORD_BOT_TOKEN",
+    "MINIMAX_API_KEY",
+    "OWNER_USER_ID",
+    "OWNER_USERNAME",
+    "CHAT_CHANNEL_ID",
+    "LOG_CHANNEL_ID",
+    "MINIMAX_BASE_URL",
+    "MINIMAX_MODEL",
+    "PROACTIVE_CHECK_SECONDS",
+    "PROACTIVE_MIN_IDLE_SECONDS",
+    "PROACTIVE_MAX_IDLE_SECONDS",
+    "STATE_DIR",
+)
+
+
+@pytest.fixture(autouse=True)
+def isolate_config_env(monkeypatch):
+    for name in CONFIG_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(config_module, "load_dotenv", lambda: False)
 
 
 def test_from_env_parses_required_and_optional_values(monkeypatch, tmp_path):
