@@ -31,13 +31,19 @@ class BotLogger:
         safe_message = self._sanitize(message)
         self._logger.info(safe_message)
         if self._adapter is not None:
-            await self._adapter.send_log(safe_message)
+            try:
+                await self._adapter.send_log(safe_message)
+            except Exception:
+                self._logger.exception("failed sending bot info log to adapter")
 
     async def error(self, message: str) -> None:
         safe_message = self._sanitize(message)
         self._logger.error(safe_message)
         if self._adapter is not None:
-            await self._adapter.send_log(safe_message)
+            try:
+                await self._adapter.send_log(safe_message)
+            except Exception:
+                self._logger.exception("failed sending bot error log to adapter")
 
     def _sanitize(self, message: str) -> str:
         safe_message = message

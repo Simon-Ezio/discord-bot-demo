@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 
 from bot.models import AgentResult, MemorySnapshot, MessageEvent, RuntimeState
+from bot.observability.bot_logger import BotLogger
 from bot.runtime import BotRuntime
 
 
@@ -142,3 +143,39 @@ def test_handle_message_sends_fallback_and_skips_updates_when_agent_fails():
         "error_type=RuntimeError"
     ]
     assert "secret" not in logger.error_messages[0].lower()
+
+
+class FailingLogAdapter:
+    async def send_log(self, text: str) -> None:
+        raise RuntimeError("discord unavailable")
+
+
+class CapturingStdlibLogger:
+    def __init__(self):
+        self.info_messages = []
+        self.error_messages = []
+        self.exception_messages = []
+
+    def info(self, message: str) -> None:
+        self.info_messages.append(message)
+
+    def error(self, message: str) -> None:
+        self.error_messages.append(message)
+
+    def exception(self, message: str) -> None:
+        self.exception_messages.append(message)
+
+
+def test_bot_logger_keeps_stdlib_logging_best_effort_when_adapter_fails():
+    stdlib_logger = CapturingStdlibLogger()
+    logger = BotLogger(adapter=FailingLogAdapter(), logger=stdlib_logger)
+
+    asyncio.run(logger.info("token=secret-value"))
+    asyncio.run(logger.error("MINIMAX_API_KEY=secret-value"))
+
+    assert stdlib_logger.info_messages == ["[redacted]"]
+    assert stdlib_logger.error_messages == ["[redacted]"]
+    assert stdlib_logger.exception_messages == [
+        "failed sending bot info log to adapter",
+        "failed sending bot error log to adapter",
+    ]

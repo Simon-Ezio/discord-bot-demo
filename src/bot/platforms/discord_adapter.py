@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Protocol
 
 from bot.models import AttachmentInfo, MessageEvent
@@ -19,6 +20,11 @@ class DiscordAdapterConfig(Protocol):
 
 class MessageRuntime(Protocol):
     async def handle_message(self, event: MessageEvent) -> None: ...
+
+
+CHAT_EMPTY_FALLBACK = "I'm here, but I lost the thread for a second."
+DISCORD_MESSAGE_CHUNK_SIZE = 1900
+SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def should_accept_message(
@@ -83,15 +89,21 @@ class DiscordAdapter:
 
     async def send_chat(self, text: str) -> None:
         channel = await self._resolve_channel(self.config.chat_channel_id)
-        await channel.send(text, allowed_mentions=self.allowed_mentions)
+        for chunk in _chunk_discord_message(text, fallback=CHAT_EMPTY_FALLBACK):
+            await channel.send(chunk, allowed_mentions=self.allowed_mentions)
 
     async def send_log(self, text: str) -> None:
+        chunks = _chunk_discord_message(text, fallback=None)
+        if not chunks:
+            return
+
         channel = await self._resolve_channel(self.config.log_channel_id)
-        await channel.send(text, allowed_mentions=self.allowed_mentions)
+        for chunk in chunks:
+            await channel.send(chunk, allowed_mentions=self.allowed_mentions)
 
     async def download_image_attachments(self, message: Any) -> list[AttachmentInfo]:
         downloaded: list[AttachmentInfo] = []
-        for attachment in getattr(message, "attachments", []):
+        for index, attachment in enumerate(getattr(message, "attachments", []), start=1):
             info = AttachmentInfo(
                 filename=str(getattr(attachment, "filename", "")),
                 content_type=getattr(attachment, "content_type", None),
@@ -105,7 +117,12 @@ class DiscordAdapter:
                 continue
 
             self.attachment_dir.mkdir(parents=True, exist_ok=True)
-            local_path = self.attachment_dir / Path(info.filename).name
+            local_path = self.attachment_dir / _safe_attachment_filename(
+                message=message,
+                attachment=attachment,
+                filename=info.filename,
+                index=index,
+            )
             await attachment.save(local_path)
             downloaded.append(
                 AttachmentInfo(
@@ -123,8 +140,8 @@ class DiscordAdapter:
         return discord.AllowedMentions(
             everyone=False,
             roles=False,
-            users=True,
-            replied_user=True,
+            users=False,
+            replied_user=False,
         )
 
     def _make_client(self) -> Any:
@@ -149,3 +166,35 @@ class DiscordAdapter:
         if discord is not None and isinstance(message.channel, discord.DMChannel):
             return True
         return getattr(message.channel, "guild", None) is None
+
+
+def _chunk_discord_message(text: str, *, fallback: str | None) -> list[str]:
+    normalized = text.strip()
+    if not normalized:
+        if fallback is None:
+            return []
+        normalized = fallback
+
+    return [
+        normalized[start : start + DISCORD_MESSAGE_CHUNK_SIZE]
+        for start in range(0, len(normalized), DISCORD_MESSAGE_CHUNK_SIZE)
+    ]
+
+
+def _safe_attachment_filename(
+    *,
+    message: Any,
+    attachment: Any,
+    filename: str,
+    index: int,
+) -> str:
+    original_name = Path(filename).name or "attachment"
+    safe_name = SAFE_FILENAME_RE.sub("_", original_name).strip("._") or "attachment"
+    message_id = _safe_identifier(getattr(message, "id", "message"))
+    attachment_id = _safe_identifier(getattr(attachment, "id", index))
+    return f"{message_id}-{attachment_id}-{index}-{safe_name}"
+
+
+def _safe_identifier(value: object) -> str:
+    safe_value = SAFE_FILENAME_RE.sub("_", str(value)).strip("._")
+    return safe_value or "unknown"
