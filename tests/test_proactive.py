@@ -1,6 +1,8 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 
+from bot.agent import PromptBuilder, RelationshipAgent
 from bot.models import MemorySnapshot, ProactiveDecision, RuntimeState
 from bot.scheduler import ProactivePlanner, ProactivePolicy, apply_proactive_sent
 
@@ -55,6 +57,16 @@ def test_policy_allows_inside_idle_window():
 
     assert decision.allowed is True
     assert decision.reason == ""
+
+
+def test_policy_handles_naive_persisted_timestamps_as_utc():
+    policy = ProactivePolicy(min_idle_seconds=60, max_idle_seconds=300)
+    naive_last_owner_message = (NOW - timedelta(seconds=90)).replace(tzinfo=None)
+    state = make_state(last_owner_message_at=naive_last_owner_message)
+
+    decision = policy.precheck(state, NOW)
+
+    assert decision.allowed is True
 
 
 def test_policy_applies_unanswered_backoff_with_reason_containing_backoff():
@@ -134,3 +146,39 @@ def test_planner_returns_safe_skip_for_empty_agent_message():
     assert decision.should_send is False
     assert decision.reason == "Check in"
     assert decision.skip_reason == "empty_proactive_message"
+
+
+class StubCompletionClient:
+    def __init__(self, response: str) -> None:
+        self.response = response
+
+    async def complete(self, messages: list[dict[str, str]]) -> str:
+        return self.response
+
+
+def test_planner_with_real_agent_allows_after_backoff_expires():
+    policy = ProactivePolicy(min_idle_seconds=60, max_idle_seconds=300)
+    state = make_state(
+        last_owner_message_at=NOW - timedelta(seconds=600),
+        last_proactive_sent_at=NOW - timedelta(seconds=240),
+        unanswered_proactive_count=2,
+    )
+    agent = RelationshipAgent(
+        StubCompletionClient(
+            json.dumps(
+                {
+                    "should_send": True,
+                    "reason": "after backoff",
+                    "message": "Still around if you want to talk.",
+                }
+            )
+        ),
+        PromptBuilder("cm6550"),
+    )
+    planner = ProactivePlanner(policy, agent)
+
+    decision = asyncio.run(planner.maybe_plan(make_snapshot(state), NOW))
+
+    assert decision.should_send is True
+    assert decision.reason == "after backoff"
+    assert decision.message == "Still around if you want to talk."

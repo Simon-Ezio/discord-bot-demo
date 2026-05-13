@@ -56,12 +56,6 @@ class RelationshipAgent:
         )
 
     async def plan_proactive(self, snapshot: MemorySnapshot) -> ProactiveDecision:
-        if snapshot.runtime_state.unanswered_proactive_count > 0:
-            return ProactiveDecision(
-                should_send=False,
-                skip_reason="waiting_for_owner_response",
-            )
-
         raw_text = await self._client.complete(self._build_proactive_messages(snapshot))
         if not raw_text.strip():
             return ProactiveDecision(

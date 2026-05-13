@@ -142,15 +142,15 @@ def test_relationship_agent_plans_proactive_message_with_model():
     assert "runtime_state" in prompt
 
 
-def test_relationship_agent_skips_proactive_planning_when_waiting_for_owner():
+def test_relationship_agent_plans_proactive_even_with_unanswered_count():
     client = StubClient(json.dumps({"should_send": True, "message": "Hello"}))
     agent = RelationshipAgent(client, PromptBuilder("Mina"))
 
     decision = asyncio.run(agent.plan_proactive(make_snapshot()))
 
-    assert decision.should_send is False
-    assert decision.skip_reason == "waiting_for_owner_response"
-    assert client.messages is None
+    assert decision.should_send is True
+    assert decision.message == "Hello"
+    assert client.messages is not None
 
 
 def test_relationship_agent_falls_back_when_proactive_json_is_invalid():

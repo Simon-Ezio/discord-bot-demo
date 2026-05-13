@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 from bot.models import MemorySnapshot, ProactiveDecision, RuntimeState
@@ -26,7 +26,9 @@ class ProactivePolicy:
         if state.last_owner_message_at is None:
             return PrecheckDecision(False, "no_owner_message")
 
-        idle_seconds = (now - state.last_owner_message_at).total_seconds()
+        normalized_now = _as_utc(now)
+        last_owner_message_at = _as_utc(state.last_owner_message_at)
+        idle_seconds = (normalized_now - last_owner_message_at).total_seconds()
         if idle_seconds < self.min_idle_seconds:
             return PrecheckDecision(
                 False,
@@ -40,8 +42,9 @@ class ProactivePolicy:
             backoff_seconds = self.min_idle_seconds * (
                 2**state.unanswered_proactive_count
             )
+            last_proactive_sent_at = _as_utc(state.last_proactive_sent_at)
             seconds_since_proactive = (
-                now - state.last_proactive_sent_at
+                normalized_now - last_proactive_sent_at
             ).total_seconds()
             if seconds_since_proactive < backoff_seconds:
                 return PrecheckDecision(
@@ -83,3 +86,9 @@ class ProactivePlanner:
             )
 
         return decision
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
