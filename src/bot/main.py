@@ -161,7 +161,16 @@ async def amain() -> None:
     logging.basicConfig(level=logging.INFO)
     config = BotConfig.from_env()
     adapter, _runtime, _logger = build_runtime(config)
-    await adapter.client.start(config.discord_bot_token)
+    try:
+        await adapter.client.start(config.discord_bot_token)
+    except Exception:
+        logging.getLogger(__name__).exception("failed to start discord client")
+        raise SystemExit(1)
+    finally:
+        try:
+            await adapter.client.close()
+        except Exception:
+            logging.getLogger(__name__).exception("failed to close discord client")
 
 
 def main() -> None:

@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 from bot.main import run_proactive_tick
 from bot.models import MemorySnapshot, ProactiveDecision, RuntimeState
@@ -43,6 +44,19 @@ class SendingAdapter:
 
     async def send_chat(self, text: str) -> None:
         self.messages.append(text)
+
+
+class FailingClient:
+    def __init__(self) -> None:
+        self.closed = False
+        self.started = False
+
+    async def start(self, token: str) -> None:
+        self.started = True
+        raise RuntimeError("connection timeout")
+
+    async def close(self) -> None:
+        self.closed = True
 
 
 class StubLogger:
@@ -143,3 +157,31 @@ def test_proactive_tick_logs_send_and_state_failures_without_raising():
         "failed saving proactive runtime state error_type=OSError",
         "failed sending proactive message error_type=RuntimeError",
     ]
+
+
+def test_discord_client_close_is_called_when_start_fails(monkeypatch):
+    from bot import main as main_module
+
+    fake_client = FailingClient()
+
+    class FakeAdapter:
+        def __init__(self) -> None:
+            self.client = fake_client
+
+    def fake_build_runtime(config):
+        return FakeAdapter(), object(), object()
+
+    monkeypatch.setattr(main_module, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(
+        main_module.BotConfig,
+        "from_env",
+        classmethod(lambda cls: SimpleNamespace(discord_bot_token="token")),
+    )
+
+    try:
+        asyncio.run(main_module.amain())
+    except SystemExit as exc:
+        assert exc.code == 1
+
+    assert fake_client.started is True
+    assert fake_client.closed is True
