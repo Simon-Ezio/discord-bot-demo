@@ -34,6 +34,11 @@ class ProactivePolicy:
                 False,
                 f"idle {idle_seconds:.0f}s below minimum {self.min_idle_seconds}s",
             )
+        if idle_seconds > self.max_idle_seconds:
+            return PrecheckDecision(
+                False,
+                f"idle {idle_seconds:.0f}s above maximum {self.max_idle_seconds}s",
+            )
 
         if (
             state.unanswered_proactive_count > 0

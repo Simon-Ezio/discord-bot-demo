@@ -85,7 +85,7 @@ def test_policy_applies_unanswered_backoff_with_reason_containing_backoff():
 def test_policy_allows_after_backoff_expires():
     policy = ProactivePolicy(min_idle_seconds=60, max_idle_seconds=300)
     state = make_state(
-        last_owner_message_at=NOW - timedelta(seconds=600),
+        last_owner_message_at=NOW - timedelta(seconds=250),
         last_proactive_sent_at=NOW - timedelta(seconds=240),
         unanswered_proactive_count=2,
     )
@@ -93,6 +93,16 @@ def test_policy_allows_after_backoff_expires():
     decision = policy.precheck(state, NOW)
 
     assert decision.allowed is True
+
+
+def test_policy_skips_after_max_idle_window():
+    policy = ProactivePolicy(min_idle_seconds=60, max_idle_seconds=300)
+    state = make_state(last_owner_message_at=NOW - timedelta(seconds=301))
+
+    decision = policy.precheck(state, NOW)
+
+    assert decision.allowed is False
+    assert "maximum" in decision.reason
 
 
 def test_apply_proactive_sent_updates_runtime_state_fields():
@@ -159,7 +169,7 @@ class StubCompletionClient:
 def test_planner_with_real_agent_allows_after_backoff_expires():
     policy = ProactivePolicy(min_idle_seconds=60, max_idle_seconds=300)
     state = make_state(
-        last_owner_message_at=NOW - timedelta(seconds=600),
+        last_owner_message_at=NOW - timedelta(seconds=250),
         last_proactive_sent_at=NOW - timedelta(seconds=240),
         unanswered_proactive_count=2,
     )

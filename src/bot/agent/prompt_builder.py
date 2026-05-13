@@ -28,6 +28,7 @@ class PromptBuilder:
                 f"Current Discord author name: {event.author_name}",
                 f"Current content: {event.content}",
                 f"Message created at: {event.created_at.isoformat()}",
+                f"Attachments:\n{self._format_attachments(event)}",
                 f"bot_identity:\n{snapshot.bot_identity}",
                 f"owner_profile:\n{snapshot.owner_profile}",
                 f"relationship_journal:\n{snapshot.relationship_journal}",
@@ -40,3 +41,18 @@ class PromptBuilder:
             {"role": "system", "content": system_content},
             {"role": "user", "content": user_content},
         ]
+
+    def _format_attachments(self, event: MessageEvent) -> str:
+        if not event.attachments:
+            return "No attachments."
+        lines = []
+        for attachment in event.attachments:
+            lines.append(
+                "- "
+                f"filename={attachment.filename}; "
+                f"content_type={attachment.content_type or 'unknown'}; "
+                f"is_image={attachment.is_image}; "
+                f"local_path={attachment.local_path or 'none'}; "
+                f"url={attachment.url or 'none'}"
+            )
+        return "\n".join(lines)

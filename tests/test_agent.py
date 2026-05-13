@@ -7,7 +7,7 @@ import pytest
 
 from bot.agent import MiniMaxClient, PromptBuilder, RelationshipAgent
 from bot.agent.relationship_agent import FALLBACK_REPLY
-from bot.models import MemorySnapshot, MessageEvent, RuntimeState
+from bot.models import AttachmentInfo, MemorySnapshot, MessageEvent, RuntimeState
 
 
 def make_snapshot() -> MemorySnapshot:
@@ -32,6 +32,25 @@ def make_event() -> MessageEvent:
     )
 
 
+def make_event_with_attachment() -> MessageEvent:
+    return MessageEvent(
+        message_id="msg-2",
+        channel_id="channel-1",
+        author_id="owner-1",
+        author_name="Mina",
+        content="This image feels like your avatar.",
+        created_at=datetime(2026, 5, 13, 9, 45, tzinfo=timezone.utc),
+        attachments=[
+            AttachmentInfo(
+                filename="avatar.png",
+                content_type="image/png",
+                url="https://cdn.example/avatar.png",
+                local_path="state/attachments/msg-2-avatar.png",
+            )
+        ],
+    )
+
+
 def test_prompt_builder_includes_memory_event_and_natural_no_survey_instruction():
     messages = PromptBuilder(owner_username="Mina").build_chat_messages(
         make_snapshot(), make_event()
@@ -50,6 +69,19 @@ def test_prompt_builder_includes_memory_event_and_natural_no_survey_instruction(
     assert "green scarf" in combined
     assert "Mina" in combined
     assert "I finally finished that puzzle game." in combined
+
+
+def test_prompt_builder_includes_attachment_context():
+    messages = PromptBuilder(owner_username="Mina").build_chat_messages(
+        make_snapshot(), make_event_with_attachment()
+    )
+
+    combined = "\n".join(message["content"] for message in messages)
+
+    assert "Attachments:" in combined
+    assert "avatar.png" in combined
+    assert "state/attachments/msg-2-avatar.png" in combined
+    assert "https://cdn.example/avatar.png" in combined
 
 
 class StubClient:
