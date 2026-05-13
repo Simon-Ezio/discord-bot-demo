@@ -50,6 +50,11 @@ def parse_args() -> argparse.Namespace:
         default="state",
         help="State directory to initialize and update. Defaults to ./state.",
     )
+    parser.add_argument(
+        "--use-minimax",
+        action="store_true",
+        help="Call the real MiniMax API. Defaults to the offline dry-run agent.",
+    )
     return parser.parse_args()
 
 
@@ -77,9 +82,11 @@ def load_dry_run_config(state_dir: Path) -> BotConfig:
         )
 
 
-def build_agent(config: BotConfig):
-    if not config.minimax_api_key:
+def build_agent(config: BotConfig, *, use_minimax: bool):
+    if not use_minimax:
         return DryRunAgent()
+    if not config.minimax_api_key:
+        raise ConfigError("MINIMAX_API_KEY is required with --use-minimax")
 
     from bot.agent.minimax_client import MiniMaxClient
     from bot.agent.prompt_builder import PromptBuilder
@@ -95,13 +102,13 @@ def build_agent(config: BotConfig):
     )
 
 
-async def run_turn(message: str, state_dir: Path) -> None:
+async def run_turn(message: str, state_dir: Path, *, use_minimax: bool) -> None:
     config = load_dry_run_config(state_dir)
     store = MemoryStore(config.state_dir)
     runtime = BotRuntime(
         store,
         MemoryCurator(store),
-        build_agent(config),
+        build_agent(config, use_minimax=use_minimax),
         ConsoleAdapter(),
         ConsoleLogger(),
     )
@@ -119,7 +126,9 @@ async def run_turn(message: str, state_dir: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    asyncio.run(run_turn(args.message, Path(args.state_dir)))
+    asyncio.run(
+        run_turn(args.message, Path(args.state_dir), use_minimax=args.use_minimax)
+    )
 
 
 if __name__ == "__main__":

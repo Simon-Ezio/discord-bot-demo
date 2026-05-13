@@ -10,6 +10,7 @@ from bot.agent.relationship_agent import RelationshipAgent
 from bot.config import BotConfig
 from bot.memory.curator import MemoryCurator
 from bot.memory.store import MemoryStore
+from bot.models import ProactiveDecision
 from bot.observability.bot_logger import BotLogger
 from bot.platforms.discord_adapter import DiscordAdapter
 from bot.runtime import BotRuntime
@@ -20,6 +21,64 @@ from bot.scheduler.proactive import (
 )
 
 
+async def run_proactive_tick(
+    *,
+    store: MemoryStore,
+    agent: RelationshipAgent,
+    adapter: DiscordAdapter,
+    logger: BotLogger,
+    min_idle_seconds: int,
+    max_idle_seconds: int,
+    now: datetime | None = None,
+) -> None:
+    policy = ProactivePolicy(
+        min_idle_seconds=min_idle_seconds,
+        max_idle_seconds=max_idle_seconds,
+    )
+    planner = ProactivePlanner(policy, agent)
+    current_time = now or datetime.now(UTC)
+    snapshot = store.load_snapshot()
+
+    try:
+        decision = await planner.maybe_plan(snapshot, current_time)
+    except Exception as exc:
+        await logger.error(
+            "failed planning proactive message "
+            f"error_type={type(exc).__name__}"
+        )
+        return
+
+    if not decision.should_send:
+        if decision.skip_reason:
+            await logger.info(f"skipped proactive message reason={decision.skip_reason}")
+        return
+
+    try:
+        await adapter.send_chat(decision.message)
+        store.save_runtime_state(
+            apply_proactive_sent(snapshot.runtime_state, decision, current_time)
+        )
+        await logger.info("sent proactive message")
+    except Exception as exc:
+        failure_decision = ProactiveDecision(
+            should_send=decision.should_send,
+            reason=f"send_failed: {decision.reason}",
+            message=decision.message,
+            skip_reason=decision.skip_reason,
+        )
+        store.save_runtime_state(
+            apply_proactive_sent(
+                snapshot.runtime_state,
+                failure_decision,
+                current_time,
+            )
+        )
+        await logger.error(
+            "failed sending proactive message "
+            f"error_type={type(exc).__name__}"
+        )
+
+
 async def run_proactive_loop(
     *,
     config: BotConfig,
@@ -28,42 +87,16 @@ async def run_proactive_loop(
     adapter: DiscordAdapter,
     logger: BotLogger,
 ) -> None:
-    policy = ProactivePolicy(
-        min_idle_seconds=config.proactive_min_idle_seconds,
-        max_idle_seconds=config.proactive_max_idle_seconds,
-    )
-    planner = ProactivePlanner(policy, agent)
-
     while True:
         await asyncio.sleep(config.proactive_check_seconds)
-        now = datetime.now(UTC)
-        snapshot = store.load_snapshot()
-
-        try:
-            decision = await planner.maybe_plan(snapshot, now)
-        except Exception as exc:
-            await logger.error(
-                "failed planning proactive message "
-                f"error_type={type(exc).__name__}"
-            )
-            continue
-
-        if not decision.should_send:
-            if decision.skip_reason:
-                await logger.info(f"skipped proactive message reason={decision.skip_reason}")
-            continue
-
-        try:
-            await adapter.send_chat(decision.message)
-            store.save_runtime_state(
-                apply_proactive_sent(snapshot.runtime_state, decision, now)
-            )
-            await logger.info("sent proactive message")
-        except Exception as exc:
-            await logger.error(
-                "failed sending proactive message "
-                f"error_type={type(exc).__name__}"
-            )
+        await run_proactive_tick(
+            store=store,
+            agent=agent,
+            adapter=adapter,
+            logger=logger,
+            min_idle_seconds=config.proactive_min_idle_seconds,
+            max_idle_seconds=config.proactive_max_idle_seconds,
+        )
 
 
 def build_runtime(config: BotConfig) -> tuple[DiscordAdapter, BotRuntime, BotLogger]:

@@ -1,6 +1,21 @@
+import importlib.util
 import os
 import subprocess
 import sys
+from pathlib import Path
+
+from bot.config import DEFAULT_MINIMAX_BASE_URL, BotConfig
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DRY_RUN_TURN_PATH = ROOT / "scripts" / "dry_run_turn.py"
+DRY_RUN_SPEC = importlib.util.spec_from_file_location(
+    "dry_run_turn", DRY_RUN_TURN_PATH
+)
+assert DRY_RUN_SPEC is not None
+dry_run_turn = importlib.util.module_from_spec(DRY_RUN_SPEC)
+assert DRY_RUN_SPEC.loader is not None
+DRY_RUN_SPEC.loader.exec_module(dry_run_turn)
 
 
 def run_script(*args, env=None):
@@ -29,6 +44,28 @@ def test_dry_run_turn_help_exits_zero_and_mentions_message():
 
     assert result.returncode == 0
     assert "message" in result.stdout.lower()
+    assert "--use-minimax" in result.stdout
+
+
+def test_dry_run_agent_is_default_even_when_minimax_key_exists(tmp_path):
+    config = BotConfig(
+        discord_bot_token="discord-token",
+        minimax_api_key="minimax-key",
+        owner_user_id="owner-id",
+        owner_username="owner",
+        chat_channel_id="chat-id",
+        log_channel_id="log-id",
+        minimax_base_url=DEFAULT_MINIMAX_BASE_URL,
+        minimax_model="MiniMax-Text-01",
+        proactive_check_seconds=60,
+        proactive_min_idle_seconds=300,
+        proactive_max_idle_seconds=900,
+        state_dir=Path(tmp_path),
+    )
+
+    agent = dry_run_turn.build_agent(config, use_minimax=False)
+
+    assert isinstance(agent, dry_run_turn.DryRunAgent)
 
 
 def test_show_state_prints_sections_without_secrets(tmp_path):
