@@ -1,0 +1,1 @@
+"""Discord relationship bot package."""
