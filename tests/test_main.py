@@ -9,14 +9,17 @@ NOW = datetime(2026, 5, 13, 12, 0, tzinfo=timezone.utc)
 
 
 class StubStore:
-    def __init__(self, snapshot: MemorySnapshot) -> None:
+    def __init__(self, snapshot: MemorySnapshot, save_error: Exception | None = None) -> None:
         self.snapshot = snapshot
         self.saved_state = None
+        self.save_error = save_error
 
     def load_snapshot(self) -> MemorySnapshot:
         return self.snapshot
 
     def save_runtime_state(self, state: RuntimeState) -> None:
+        if self.save_error is not None:
+            raise self.save_error
         self.saved_state = state
 
 
@@ -32,6 +35,14 @@ class StubAgent:
 class FailingAdapter:
     async def send_chat(self, text: str) -> None:
         raise RuntimeError("discord unavailable")
+
+
+class SendingAdapter:
+    def __init__(self) -> None:
+        self.messages = []
+
+    async def send_chat(self, text: str) -> None:
+        self.messages.append(text)
 
 
 class StubLogger:
@@ -83,3 +94,52 @@ def test_proactive_tick_records_send_failure_for_backoff():
     assert store.saved_state.last_proactive_message == "Want to talk?"
     assert store.saved_state.unanswered_proactive_count == 1
     assert logger.errors
+
+
+def test_proactive_tick_logs_state_save_failure_after_successful_send():
+    store = StubStore(make_snapshot(), save_error=OSError("disk full"))
+    adapter = SendingAdapter()
+    logger = StubLogger()
+
+    asyncio.run(
+        run_proactive_tick(
+            store=store,
+            agent=StubAgent(),
+            adapter=adapter,
+            logger=logger,
+            min_idle_seconds=60,
+            max_idle_seconds=300,
+            now=NOW,
+        )
+    )
+
+    assert adapter.messages == ["Want to talk?"]
+    assert store.saved_state is None
+    assert (
+        "failed saving proactive runtime state error_type=OSError"
+        in logger.errors
+    )
+    assert "sent proactive message" in logger.infos
+
+
+def test_proactive_tick_logs_send_and_state_failures_without_raising():
+    store = StubStore(make_snapshot(), save_error=OSError("disk full"))
+    logger = StubLogger()
+
+    asyncio.run(
+        run_proactive_tick(
+            store=store,
+            agent=StubAgent(),
+            adapter=FailingAdapter(),
+            logger=logger,
+            min_idle_seconds=60,
+            max_idle_seconds=300,
+            now=NOW,
+        )
+    )
+
+    assert store.saved_state is None
+    assert logger.errors == [
+        "failed saving proactive runtime state error_type=OSError",
+        "failed sending proactive message error_type=RuntimeError",
+    ]

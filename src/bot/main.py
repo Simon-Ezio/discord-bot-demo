@@ -55,8 +55,12 @@ async def run_proactive_tick(
 
     try:
         await adapter.send_chat(decision.message)
-        store.save_runtime_state(
-            apply_proactive_sent(snapshot.runtime_state, decision, current_time)
+        await _save_proactive_state(
+            store,
+            logger,
+            snapshot.runtime_state,
+            decision,
+            current_time,
         )
         await logger.info("sent proactive message")
     except Exception as exc:
@@ -66,15 +70,31 @@ async def run_proactive_tick(
             message=decision.message,
             skip_reason=decision.skip_reason,
         )
-        store.save_runtime_state(
-            apply_proactive_sent(
-                snapshot.runtime_state,
-                failure_decision,
-                current_time,
-            )
+        await _save_proactive_state(
+            store,
+            logger,
+            snapshot.runtime_state,
+            failure_decision,
+            current_time,
         )
         await logger.error(
             "failed sending proactive message "
+            f"error_type={type(exc).__name__}"
+        )
+
+
+async def _save_proactive_state(
+    store: MemoryStore,
+    logger: BotLogger,
+    state,
+    decision: ProactiveDecision,
+    now: datetime,
+) -> None:
+    try:
+        store.save_runtime_state(apply_proactive_sent(state, decision, now))
+    except Exception as exc:
+        await logger.error(
+            "failed saving proactive runtime state "
             f"error_type={type(exc).__name__}"
         )
 
