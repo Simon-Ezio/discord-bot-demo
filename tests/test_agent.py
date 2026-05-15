@@ -9,6 +9,7 @@ from bot.agent import MiniMaxClient, PromptBuilder, RelationshipAgent
 from bot.agent.relationship_agent import FALLBACK_REPLY
 from bot.models import (
     AttachmentInfo,
+    ConversationEntry,
     MemorySnapshot,
     MemoryUpdate,
     MessageEvent,
@@ -90,6 +91,38 @@ def test_prompt_builder_includes_attachment_context():
     assert "avatar.png" in combined
     assert "state/attachments/msg-2-avatar.png" in combined
     assert "https://cdn.example/avatar.png" in combined
+
+
+def test_prompt_builder_includes_layered_sections_and_history():
+    snapshot = make_snapshot()
+    snapshot.conversation_history = [
+        ConversationEntry(
+            role="owner",
+            content="你好",
+            timestamp=datetime(2026, 5, 13, 9, 20, tzinfo=timezone.utc),
+        ),
+        ConversationEntry(
+            role="bot",
+            content="嘿，我在。",
+            timestamp=datetime(2026, 5, 13, 9, 21, tzinfo=timezone.utc),
+        ),
+    ]
+
+    messages = PromptBuilder(owner_username="Mina").build_chat_messages(
+        snapshot, make_event()
+    )
+
+    system_content = messages[0]["content"]
+    user_content = messages[1]["content"]
+
+    assert "## Identity" in system_content
+    assert "## Behavior rules" in system_content
+    assert "## Stage guidance" in system_content
+    assert "## Memory update operations" in system_content
+    assert "Recent conversation:" in user_content
+    assert "Owner: 你好" in user_content
+    assert "Bot: 嘿，我在。" in user_content
+    assert "Current message:" in user_content
 
 
 class StubClient:
