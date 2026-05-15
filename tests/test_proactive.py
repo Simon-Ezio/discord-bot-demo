@@ -65,6 +65,33 @@ def test_policy_allows_inside_idle_window():
     assert decision.reason == ""
 
 
+def test_policy_uses_configured_early_idle_for_early_stage():
+    policy = ProactivePolicy(
+        min_idle_seconds=120,
+        max_idle_seconds=300,
+        early_idle_seconds=30,
+    )
+    state = make_state(last_owner_message_at=NOW - timedelta(seconds=45))
+
+    decision = policy.precheck(state, NOW, stage="early")
+
+    assert decision.allowed is True
+
+
+def test_policy_uses_standard_min_idle_for_later_stage():
+    policy = ProactivePolicy(
+        min_idle_seconds=120,
+        max_idle_seconds=300,
+        early_idle_seconds=30,
+    )
+    state = make_state(last_owner_message_at=NOW - timedelta(seconds=45))
+
+    decision = policy.precheck(state, NOW, stage="established")
+
+    assert decision.allowed is False
+    assert "minimum 120s" in decision.reason
+
+
 def test_policy_handles_naive_persisted_timestamps_as_utc():
     policy = ProactivePolicy(min_idle_seconds=60, max_idle_seconds=300)
     naive_last_owner_message = (NOW - timedelta(seconds=90)).replace(tzinfo=None)
@@ -94,6 +121,23 @@ def test_policy_allows_after_backoff_expires():
         last_owner_message_at=NOW - timedelta(seconds=250),
         last_proactive_sent_at=NOW - timedelta(seconds=240),
         unanswered_proactive_count=2,
+    )
+
+    decision = policy.precheck(state, NOW)
+
+    assert decision.allowed is True
+
+
+def test_policy_caps_unanswered_backoff_for_debuggable_proactive():
+    policy = ProactivePolicy(
+        min_idle_seconds=60,
+        max_idle_seconds=1000,
+        backoff_cap_seconds=180,
+    )
+    state = make_state(
+        last_owner_message_at=NOW - timedelta(seconds=500),
+        last_proactive_sent_at=NOW - timedelta(seconds=200),
+        unanswered_proactive_count=4,
     )
 
     decision = policy.precheck(state, NOW)
@@ -259,6 +303,8 @@ def test_run_proactive_tick_saves_sent_bot_message_to_history():
             logger=logger,
             min_idle_seconds=60,
             max_idle_seconds=300,
+            early_idle_seconds=30,
+            backoff_cap_seconds=7200,
             now=NOW,
         )
     )

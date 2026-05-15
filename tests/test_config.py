@@ -18,6 +18,8 @@ CONFIG_ENV_VARS = (
     "PROACTIVE_CHECK_SECONDS",
     "PROACTIVE_MIN_IDLE_SECONDS",
     "PROACTIVE_MAX_IDLE_SECONDS",
+    "PROACTIVE_EARLY_IDLE_SECONDS",
+    "PROACTIVE_BACKOFF_CAP_SECONDS",
     "STATE_DIR",
 )
 
@@ -41,6 +43,8 @@ def test_from_env_parses_required_and_optional_values(monkeypatch, tmp_path):
     monkeypatch.setenv("PROACTIVE_CHECK_SECONDS", "30")
     monkeypatch.setenv("PROACTIVE_MIN_IDLE_SECONDS", "120")
     monkeypatch.setenv("PROACTIVE_MAX_IDLE_SECONDS", "240")
+    monkeypatch.setenv("PROACTIVE_EARLY_IDLE_SECONDS", "45")
+    monkeypatch.setenv("PROACTIVE_BACKOFF_CAP_SECONDS", "90")
     monkeypatch.setenv("STATE_DIR", str(tmp_path / "custom-state"))
 
     config = BotConfig.from_env()
@@ -56,6 +60,8 @@ def test_from_env_parses_required_and_optional_values(monkeypatch, tmp_path):
     assert config.proactive_check_seconds == 30
     assert config.proactive_min_idle_seconds == 120
     assert config.proactive_max_idle_seconds == 240
+    assert config.proactive_early_idle_seconds == 45
+    assert config.proactive_backoff_cap_seconds == 90
     assert config.state_dir == tmp_path / "custom-state"
 
 
@@ -76,6 +82,8 @@ def test_from_env_requires_core_values(monkeypatch):
         ("PROACTIVE_CHECK_SECONDS", "0"),
         ("PROACTIVE_MIN_IDLE_SECONDS", "-1"),
         ("PROACTIVE_MAX_IDLE_SECONDS", "not-an-int"),
+        ("PROACTIVE_EARLY_IDLE_SECONDS", "0"),
+        ("PROACTIVE_BACKOFF_CAP_SECONDS", "-1"),
     ],
 )
 def test_from_env_rejects_non_positive_or_non_integer_proactive_values(
@@ -116,6 +124,8 @@ def test_from_env_uses_defaults(monkeypatch):
     monkeypatch.delenv("PROACTIVE_CHECK_SECONDS", raising=False)
     monkeypatch.delenv("PROACTIVE_MIN_IDLE_SECONDS", raising=False)
     monkeypatch.delenv("PROACTIVE_MAX_IDLE_SECONDS", raising=False)
+    monkeypatch.delenv("PROACTIVE_EARLY_IDLE_SECONDS", raising=False)
+    monkeypatch.delenv("PROACTIVE_BACKOFF_CAP_SECONDS", raising=False)
     monkeypatch.delenv("STATE_DIR", raising=False)
 
     config = BotConfig.from_env()
@@ -127,5 +137,7 @@ def test_from_env_uses_defaults(monkeypatch):
     )
     assert config.proactive_check_seconds == 60
     assert config.proactive_min_idle_seconds == 300
-    assert config.proactive_max_idle_seconds == 900
+    assert config.proactive_max_idle_seconds == 86400
+    assert config.proactive_early_idle_seconds == 150
+    assert config.proactive_backoff_cap_seconds == 7200
     assert config.state_dir == Path("state")

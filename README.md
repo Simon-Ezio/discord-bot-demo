@@ -21,11 +21,27 @@ LOG_CHANNEL_ID=channel-for-runtime-logs
 STATE_DIR=state
 PROACTIVE_CHECK_SECONDS=60
 PROACTIVE_MIN_IDLE_SECONDS=300
-PROACTIVE_MAX_IDLE_SECONDS=900
+PROACTIVE_MAX_IDLE_SECONDS=86400
+PROACTIVE_EARLY_IDLE_SECONDS=150
+PROACTIVE_BACKOFF_CAP_SECONDS=7200
 MINIMAX_MODEL=MiniMax-Text-01
 ```
 
 `MINIMAX_BASE_URL` is optional and defaults to the MiniMax chat completion URL.
+
+## Proactive Debug Timing
+
+For fast local proactive testing:
+
+```dotenv
+PROACTIVE_CHECK_SECONDS=10
+PROACTIVE_MIN_IDLE_SECONDS=30
+PROACTIVE_MAX_IDLE_SECONDS=86400
+PROACTIVE_EARLY_IDLE_SECONDS=15
+PROACTIVE_BACKOFF_CAP_SECONDS=60
+```
+
+`PROACTIVE_CHECK_SECONDS` controls how often the loop wakes up. `PROACTIVE_MIN_IDLE_SECONDS` controls normal idle delay. `PROACTIVE_EARLY_IDLE_SECONDS` makes the first-meeting stage easier to test. `PROACTIVE_BACKOFF_CAP_SECONDS` prevents ignored proactive messages from backing off for hours during development.
 
 ## Discord IDs
 

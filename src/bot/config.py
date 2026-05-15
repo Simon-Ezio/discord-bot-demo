@@ -27,6 +27,8 @@ class BotConfig:
     proactive_check_seconds: int
     proactive_min_idle_seconds: int
     proactive_max_idle_seconds: int
+    proactive_early_idle_seconds: int
+    proactive_backoff_cap_seconds: int
     state_dir: Path
     proxy: str | None
     proxy_ssl_verify: bool
@@ -45,7 +47,15 @@ class BotConfig:
             "PROACTIVE_MIN_IDLE_SECONDS", "300"
         )
         proactive_max_idle_seconds = _positive_int(
-            "PROACTIVE_MAX_IDLE_SECONDS", "900"
+            "PROACTIVE_MAX_IDLE_SECONDS", "86400"
+        )
+        proactive_early_idle_seconds = _positive_int(
+            "PROACTIVE_EARLY_IDLE_SECONDS",
+            str(max(1, proactive_min_idle_seconds // 2)),
+        )
+        proactive_backoff_cap_seconds = _positive_int(
+            "PROACTIVE_BACKOFF_CAP_SECONDS",
+            "7200",
         )
 
         if proactive_min_idle_seconds > proactive_max_idle_seconds:
@@ -69,6 +79,8 @@ class BotConfig:
             proactive_check_seconds=proactive_check_seconds,
             proactive_min_idle_seconds=proactive_min_idle_seconds,
             proactive_max_idle_seconds=proactive_max_idle_seconds,
+            proactive_early_idle_seconds=proactive_early_idle_seconds,
+            proactive_backoff_cap_seconds=proactive_backoff_cap_seconds,
             state_dir=Path(_optional("STATE_DIR", "state")),
             proxy=proxy or None,
             proxy_ssl_verify=proxy_ssl_verify,

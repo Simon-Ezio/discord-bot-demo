@@ -29,11 +29,15 @@ async def run_proactive_tick(
     logger: BotLogger,
     min_idle_seconds: int,
     max_idle_seconds: int,
+    early_idle_seconds: int,
+    backoff_cap_seconds: int,
     now: datetime | None = None,
 ) -> None:
     policy = ProactivePolicy(
         min_idle_seconds=min_idle_seconds,
         max_idle_seconds=max_idle_seconds,
+        early_idle_seconds=early_idle_seconds,
+        backoff_cap_seconds=backoff_cap_seconds,
     )
     planner = ProactivePlanner(policy, agent)
     current_time = now or datetime.now(UTC)
@@ -136,6 +140,8 @@ async def run_proactive_loop(
             logger=logger,
             min_idle_seconds=config.proactive_min_idle_seconds,
             max_idle_seconds=config.proactive_max_idle_seconds,
+            early_idle_seconds=config.proactive_early_idle_seconds,
+            backoff_cap_seconds=config.proactive_backoff_cap_seconds,
         )
 
 
