@@ -85,8 +85,9 @@ def load_dry_run_config(state_dir: Path) -> BotConfig:
                 os.getenv("PROACTIVE_BACKOFF_CAP_SECONDS", "7200")
             ),
             state_dir=state_dir,
-            proxy=None,
-            proxy_ssl_verify=True,
+            proxy=os.getenv("PROXY") or None,
+            proxy_ssl_verify=os.getenv("PROXY_SSL_VERIFY", "true").lower()
+            in ("true", "1", "yes"),
         )
 
 
@@ -105,6 +106,8 @@ def build_agent(config: BotConfig, *, use_minimax: bool):
             api_key=config.minimax_api_key,
             base_url=config.minimax_base_url,
             model=config.minimax_model,
+            proxy=config.proxy,
+            proxy_ssl_verify=config.proxy_ssl_verify,
         ),
         PromptBuilder(config.owner_username),
     )

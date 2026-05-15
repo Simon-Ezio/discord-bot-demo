@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from bot.config import DEFAULT_MINIMAX_BASE_URL, BotConfig
+from bot.config import DEFAULT_MINIMAX_BASE_URL, BotConfig, ConfigError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,6 +70,55 @@ def test_dry_run_agent_is_default_even_when_minimax_key_exists(tmp_path):
     agent = dry_run_turn.build_agent(config, use_minimax=False)
 
     assert isinstance(agent, dry_run_turn.DryRunAgent)
+
+
+def test_dry_run_fallback_reads_proxy_env(monkeypatch, tmp_path):
+    def raise_config_error():
+        raise ConfigError("missing config")
+
+    monkeypatch.setattr(dry_run_turn.BotConfig, "from_env", raise_config_error)
+    monkeypatch.setenv("PROXY", "http://proxy.local:8080")
+    monkeypatch.setenv("PROXY_SSL_VERIFY", "false")
+
+    config = dry_run_turn.load_dry_run_config(Path(tmp_path))
+
+    assert config.proxy == "http://proxy.local:8080"
+    assert config.proxy_ssl_verify is False
+
+
+def test_dry_run_minimax_agent_forwards_proxy_config(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeMiniMaxClient:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+    from bot.agent import minimax_client
+
+    monkeypatch.setattr(minimax_client, "MiniMaxClient", FakeMiniMaxClient)
+    config = BotConfig(
+        discord_bot_token="discord-token",
+        minimax_api_key="minimax-key",
+        owner_user_id="owner-id",
+        owner_username="owner",
+        chat_channel_id="chat-id",
+        log_channel_id="log-id",
+        minimax_base_url=DEFAULT_MINIMAX_BASE_URL,
+        minimax_model="MiniMax-Text-01",
+        proactive_check_seconds=60,
+        proactive_min_idle_seconds=300,
+        proactive_max_idle_seconds=86400,
+        proactive_early_idle_seconds=150,
+        proactive_backoff_cap_seconds=7200,
+        state_dir=Path(tmp_path),
+        proxy="http://proxy.local:8080",
+        proxy_ssl_verify=False,
+    )
+
+    dry_run_turn.build_agent(config, use_minimax=True)
+
+    assert captured["proxy"] == "http://proxy.local:8080"
+    assert captured["proxy_ssl_verify"] is False
 
 
 def test_show_state_prints_sections_without_secrets(tmp_path):
