@@ -95,6 +95,8 @@ def test_proactive_tick_records_send_failure_for_backoff():
             logger=logger,
             min_idle_seconds=60,
             max_idle_seconds=300,
+            early_idle_seconds=30,
+            backoff_cap_seconds=7200,
             now=NOW,
         )
     )
@@ -123,6 +125,8 @@ def test_proactive_tick_logs_state_save_failure_after_successful_send():
             logger=logger,
             min_idle_seconds=60,
             max_idle_seconds=300,
+            early_idle_seconds=30,
+            backoff_cap_seconds=7200,
             now=NOW,
         )
     )
@@ -148,6 +152,8 @@ def test_proactive_tick_logs_send_and_state_failures_without_raising():
             logger=logger,
             min_idle_seconds=60,
             max_idle_seconds=300,
+            early_idle_seconds=30,
+            backoff_cap_seconds=7200,
             now=NOW,
         )
     )

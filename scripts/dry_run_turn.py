@@ -76,9 +76,17 @@ def load_dry_run_config(state_dir: Path) -> BotConfig:
                 os.getenv("PROACTIVE_MIN_IDLE_SECONDS", "300")
             ),
             proactive_max_idle_seconds=int(
-                os.getenv("PROACTIVE_MAX_IDLE_SECONDS", "900")
+                os.getenv("PROACTIVE_MAX_IDLE_SECONDS", "86400")
+            ),
+            proactive_early_idle_seconds=int(
+                os.getenv("PROACTIVE_EARLY_IDLE_SECONDS", "150")
+            ),
+            proactive_backoff_cap_seconds=int(
+                os.getenv("PROACTIVE_BACKOFF_CAP_SECONDS", "7200")
             ),
             state_dir=state_dir,
+            proxy=None,
+            proxy_ssl_verify=True,
         )
 
 
