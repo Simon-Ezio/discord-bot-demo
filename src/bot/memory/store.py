@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import tempfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 from bot.models import ConversationEntry, MemorySnapshot, RuntimeState
@@ -19,6 +20,7 @@ DEFAULT_RELATIONSHIP_JOURNAL = "# Relationship Journal\n"
 DEFAULT_AVATAR_PROMPT = "# Avatar Prompt\n"
 MAX_CONVERSATION_HISTORY_MESSAGES = 10
 CONVERSATION_HISTORY_FILE = "conversation_history.json"
+EVENTS_FILE = "events.jsonl"
 
 
 class MemoryStore:
@@ -131,6 +133,10 @@ class MemoryStore:
         if not history_path.exists():
             self._atomic_write(history_path, "[]\n")
 
+        events_path = self.state_dir / EVENTS_FILE
+        if not events_path.exists():
+            events_path.write_text("", encoding="utf-8")
+
     def _read_markdown(self, path_name: str) -> str:
         return self._state_file(path_name).read_text(encoding="utf-8")
 
@@ -170,6 +176,26 @@ class MemoryStore:
             counter += 1
             candidate = self.attachments_dir / f"{stem}-{counter}.json"
         return candidate
+
+    def append_event(
+        self,
+        event_type: str,
+        summary: str,
+        *,
+        at: datetime | None = None,
+        **extra: str,
+    ) -> None:
+        self._ensure_state_files()
+        timestamp = (at or datetime.now(UTC)).isoformat()
+        entry: dict[str, str] = {
+            "type": event_type,
+            "at": timestamp,
+            "summary": summary,
+        }
+        entry.update(extra)
+        line = json.dumps(entry, ensure_ascii=False) + "\n"
+        with open(self.state_dir / EVENTS_FILE, "a", encoding="utf-8") as fh:
+            fh.write(line)
 
     def _atomic_write(self, path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

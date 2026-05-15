@@ -59,6 +59,14 @@ async def run_proactive_tick(
 
     try:
         await adapter.send_chat(decision.message)
+        try:
+            store.append_event(
+                "proactive_sent",
+                summary=decision.message[:120],
+                reason=decision.reason,
+            )
+        except Exception:
+            pass
         await _save_proactive_history(store, logger, decision.message, current_time)
         await _save_proactive_state(
             store,
@@ -82,6 +90,13 @@ async def run_proactive_tick(
             failure_decision,
             current_time,
         )
+        try:
+            store.append_event(
+                "proactive_failed",
+                summary=decision.reason[:120],
+            )
+        except Exception:
+            pass
         await logger.error(
             "failed sending proactive message "
             f"error_type={type(exc).__name__}"

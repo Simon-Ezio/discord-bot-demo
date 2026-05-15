@@ -30,38 +30,77 @@ class RelationshipAgent:
     async def respond(
         self, snapshot: MemorySnapshot, event: MessageEvent
     ) -> AgentResult:
+        reply_text = await self._chat(snapshot, event)
+        reflection = await self._reflect(snapshot, event, reply_text)
+        return AgentResult(
+            reply_text=sanitize_discord_output(reply_text),
+            bot_identity_updates=reflection.get("bot_identity_updates", []),
+            owner_profile_updates=reflection.get("owner_profile_updates", []),
+            relationship_journal_updates=reflection.get("relationship_journal_updates", []),
+            avatar_updates=reflection.get("avatar_updates", []),
+            runtime_notes=reflection.get("runtime_notes", []),
+        )
+
+    async def _chat(
+        self, snapshot: MemorySnapshot, event: MessageEvent
+    ) -> str:
         messages = self._prompt_builder.build_chat_messages(snapshot, event)
         raw_text = await self._client.complete(messages)
         if not raw_text.strip():
-            return AgentResult(reply_text=FALLBACK_REPLY)
+            return FALLBACK_REPLY
 
         json_text = self._strip_code_fence(raw_text)
         try:
             parsed = json.loads(json_text)
         except json.JSONDecodeError:
-            return AgentResult(reply_text=sanitize_discord_output(raw_text.strip()))
+            return sanitize_discord_output(raw_text.strip())
 
         if not isinstance(parsed, dict):
-            return AgentResult(reply_text=sanitize_discord_output(raw_text.strip()))
+            return sanitize_discord_output(raw_text.strip())
 
         reply_text = parsed.get("reply_text")
         if not isinstance(reply_text, str) or not reply_text.strip():
-            reply_text = FALLBACK_REPLY
+            return FALLBACK_REPLY
 
-        return AgentResult(
-            reply_text=sanitize_discord_output(reply_text),
-            bot_identity_updates=self._memory_update_list(
+        return reply_text
+
+    async def _reflect(
+        self,
+        snapshot: MemorySnapshot,
+        event: MessageEvent,
+        reply_text: str,
+    ) -> dict[str, Any]:
+        messages = self._prompt_builder.build_reflection_messages(
+            snapshot, event, reply_text
+        )
+        raw_text = await self._client.complete(messages)
+        if not raw_text.strip():
+            return {}
+
+        json_text = self._strip_code_fence(raw_text)
+        try:
+            parsed = json.loads(json_text)
+        except json.JSONDecodeError:
+            return {}
+
+        if not isinstance(parsed, dict):
+            return {}
+
+        return {
+            "bot_identity_updates": self._memory_update_list(
                 parsed.get("bot_identity_updates")
             ),
-            owner_profile_updates=self._memory_update_list(
+            "owner_profile_updates": self._memory_update_list(
                 parsed.get("owner_profile_updates")
             ),
-            relationship_journal_updates=self._memory_update_list(
+            "relationship_journal_updates": self._memory_update_list(
                 parsed.get("relationship_journal_updates")
             ),
-            avatar_updates=self._memory_update_list(parsed.get("avatar_updates")),
-            runtime_notes=self._string_list(parsed.get("runtime_notes")),
-        )
+            "avatar_updates": self._memory_update_list(
+                parsed.get("avatar_updates")
+            ),
+            "runtime_notes": self._string_list(parsed.get("runtime_notes")),
+        }
 
     async def plan_proactive(self, snapshot: MemorySnapshot) -> ProactiveDecision:
         raw_text = await self._client.complete(self._build_proactive_messages(snapshot))

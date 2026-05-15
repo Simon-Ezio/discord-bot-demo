@@ -23,6 +23,9 @@ class StubStore:
             raise self.save_error
         self.saved_state = state
 
+    def append_event(self, event_type: str, summary: str, **extra: str) -> None:
+        pass
+
 
 class StubAgent:
     async def plan_proactive(self, snapshot: MemorySnapshot) -> ProactiveDecision:

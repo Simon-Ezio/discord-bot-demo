@@ -26,6 +26,8 @@ class SnapshotStore(Protocol):
 
     def save_attachment_metadata(self, filename: str, source_url: str): ...
 
+    def append_event(self, event_type: str, summary: str, **extra: str) -> None: ...
+
 
 class MemoryUpdateCurator(Protocol):
     def apply_updates(
@@ -140,6 +142,27 @@ class BotRuntime:
                 f"message_id={event.message_id} "
                 f"error_type={type(exc).__name__}"
             )
+
+        try:
+            self._store.append_event(
+                "owner_message",
+                summary=event.content[:120],
+            )
+            memory_groups = [
+                ("bot_identity.md", result.bot_identity_updates),
+                ("owner_profile.md", result.owner_profile_updates),
+                ("relationship_journal.md", result.relationship_journal_updates),
+                ("avatar_prompt.md", avatar_updates),
+            ]
+            for target, updates in memory_groups:
+                if updates:
+                    self._store.append_event(
+                        "memory_update",
+                        target=target,
+                        summary=f"{len(updates)} update(s) applied",
+                    )
+        except Exception:
+            pass
 
         memory_update_count = (
             len(result.bot_identity_updates)

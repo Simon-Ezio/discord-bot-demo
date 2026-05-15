@@ -6,6 +6,9 @@ from bot.safety import contains_blocked_memory_content
 
 
 MAX_MEMORY_ENTRY_LENGTH = 500
+COMPACTION_MAX_LINES = 200
+COMPACTION_MAX_BYTES = 10240
+NEAR_DUPLICATE_JACCARD_THRESHOLD = 0.7
 
 
 class MemoryCurator:
@@ -50,6 +53,7 @@ class MemoryCurator:
 
             if changed:
                 self.store.replace_markdown(path_name, "\n".join(lines) + "\n")
+                self.compact_if_needed(path_name)
 
     def _replace_or_add(self, lines: list[str], update: MemoryUpdate) -> bool:
         find = self._normalize_find(update.find)
@@ -99,6 +103,63 @@ class MemoryCurator:
             return None
         normalized = value.strip()
         return normalized or None
+
+    def compact_if_needed(
+        self,
+        path_name: str,
+        *,
+        max_lines: int = COMPACTION_MAX_LINES,
+        max_bytes: int = COMPACTION_MAX_BYTES,
+    ) -> None:
+        content = self.store._read_markdown(path_name)
+        lines = content.splitlines()
+        if len(lines) <= max_lines and len(content.encode("utf-8")) <= max_bytes:
+            return
+
+        entry_indices = [
+            i for i, line in enumerate(lines)
+            if line.strip().startswith("- ")
+        ]
+
+        if len(entry_indices) < 2:
+            return
+
+        to_remove: set[int] = set()
+        for i in range(len(entry_indices)):
+            idx_a = entry_indices[i]
+            if idx_a in to_remove:
+                continue
+            norm_a = self._normalize_for_dedup(lines[idx_a])
+            for j in range(i + 1, len(entry_indices)):
+                idx_b = entry_indices[j]
+                if idx_b in to_remove:
+                    continue
+                norm_b = self._normalize_for_dedup(lines[idx_b])
+                if self._is_near_duplicate(norm_a, norm_b):
+                    to_remove.add(idx_a)
+                    break
+
+        if to_remove:
+            compacted = [line for i, line in enumerate(lines) if i not in to_remove]
+            self.store.replace_markdown(path_name, "\n".join(compacted) + "\n")
+
+    @staticmethod
+    def _normalize_for_dedup(line: str) -> str:
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            stripped = stripped[2:]
+        return " ".join(stripped.lower().split())
+
+    @staticmethod
+    def _is_near_duplicate(norm_a: str, norm_b: str) -> bool:
+        words_a = set(norm_a.split())
+        words_b = set(norm_b.split())
+        if not words_a or not words_b:
+            return False
+        intersection = words_a & words_b
+        union = words_a | words_b
+        jaccard = len(intersection) / len(union)
+        return jaccard >= NEAR_DUPLICATE_JACCARD_THRESHOLD
 
     def _is_safe_value(self, value: str) -> bool:
         return (

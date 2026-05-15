@@ -235,3 +235,27 @@ def test_memory_curator_ignores_replace_with_blank_find(tmp_path):
     snapshot = store.load_snapshot()
     assert "- Owner likes morning coding with tea." in snapshot.owner_profile
     assert "Owner prefers coding at night" not in snapshot.owner_profile
+
+
+def test_memory_curator_compacts_near_duplicate_lines(tmp_path):
+    store = MemoryStore(tmp_path)
+    curator = MemoryCurator(store)
+
+    entries = []
+    for i in range(250):
+        entries.append(
+            MemoryUpdate(value=f"Owner works on project alpha iteration {i}")
+        )
+    entries.append(MemoryUpdate(value="Owner loves hiking on weekends"))
+    entries.append(MemoryUpdate(value="Owner prefers coding at night"))
+
+    curator.apply_updates(owner_profile_updates=entries)
+
+    snapshot = store.load_snapshot()
+    lines = snapshot.owner_profile.splitlines()
+
+    bullet_lines = [line for line in lines if line.strip().startswith("- ")]
+    assert len(bullet_lines) < 100
+
+    assert any("hiking" in line for line in bullet_lines)
+    assert any("coding at night" in line for line in bullet_lines)

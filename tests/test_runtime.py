@@ -37,6 +37,9 @@ class FakeStore:
         self.attachment_metadata.append((filename, source_url))
         return f"state/attachments/{filename}.json"
 
+    def append_event(self, event_type: str, summary: str, **extra: str) -> None:
+        pass
+
 
 class FailingStore(FakeStore):
     def save_runtime_state(self, state: RuntimeState) -> None:

@@ -262,6 +262,9 @@ class ProactiveStore:
     def save_runtime_state(self, state: RuntimeState) -> None:
         self.saved_runtime_state = state
 
+    def append_event(self, event_type: str, summary: str, **extra: str) -> None:
+        pass
+
 
 class ProactiveAdapter:
     def __init__(self) -> None:
