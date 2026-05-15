@@ -101,13 +101,20 @@ class MemorySnapshot:
     runtime_state: RuntimeState
 
 
+@dataclass(frozen=True)
+class MemoryUpdate:
+    op: str = "add"
+    value: str = ""
+    find: str | None = None
+
+
 @dataclass
 class AgentResult:
     reply_text: str
-    bot_identity_updates: list[str] = field(default_factory=list)
-    owner_profile_updates: list[str] = field(default_factory=list)
-    relationship_journal_updates: list[str] = field(default_factory=list)
-    avatar_updates: list[str] = field(default_factory=list)
+    bot_identity_updates: list[MemoryUpdate] = field(default_factory=list)
+    owner_profile_updates: list[MemoryUpdate] = field(default_factory=list)
+    relationship_journal_updates: list[MemoryUpdate] = field(default_factory=list)
+    avatar_updates: list[MemoryUpdate] = field(default_factory=list)
     runtime_notes: list[str] = field(default_factory=list)
 
 

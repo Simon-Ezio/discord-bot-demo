@@ -7,7 +7,13 @@ import pytest
 
 from bot.agent import MiniMaxClient, PromptBuilder, RelationshipAgent
 from bot.agent.relationship_agent import FALLBACK_REPLY
-from bot.models import AttachmentInfo, MemorySnapshot, MessageEvent, RuntimeState
+from bot.models import (
+    AttachmentInfo,
+    MemorySnapshot,
+    MemoryUpdate,
+    MessageEvent,
+    RuntimeState,
+)
 
 
 def make_snapshot() -> MemorySnapshot:
@@ -109,11 +115,59 @@ def test_relationship_agent_parses_structured_json_response_into_agent_result():
     result = asyncio.run(agent.respond(make_snapshot(), make_event()))
 
     assert result.reply_text == "That puzzle victory deserves tea."
-    assert result.bot_identity_updates == ["Enjoys celebrating small wins."]
-    assert result.owner_profile_updates == ["Owner plays puzzle games."]
-    assert result.relationship_journal_updates == ["Owner shared a game milestone."]
-    assert result.avatar_updates == ["Add a tiny puzzle pin."]
+    assert result.bot_identity_updates == [
+        MemoryUpdate(value="Enjoys celebrating small wins.")
+    ]
+    assert result.owner_profile_updates == [
+        MemoryUpdate(value="Owner plays puzzle games.")
+    ]
+    assert result.relationship_journal_updates == [
+        MemoryUpdate(value="Owner shared a game milestone.")
+    ]
+    assert result.avatar_updates == [MemoryUpdate(value="Add a tiny puzzle pin.")]
     assert result.runtime_notes == ["Follow up about favorite level."]
+
+
+def test_relationship_agent_normalizes_structured_memory_update_objects():
+    raw_response = json.dumps(
+        {
+            "reply_text": "Night coding fits you.",
+            "owner_profile_updates": [
+                {
+                    "op": "replace",
+                    "find": "morning coding",
+                    "value": "Owner prefers coding at night",
+                }
+            ],
+        }
+    )
+    agent = RelationshipAgent(StubClient(raw_response), PromptBuilder("Mina"))
+
+    result = asyncio.run(agent.respond(make_snapshot(), make_event()))
+
+    assert result.owner_profile_updates == [
+        MemoryUpdate(
+            op="replace",
+            find="morning coding",
+            value="Owner prefers coding at night",
+        )
+    ]
+
+
+def test_relationship_agent_keeps_legacy_string_memory_updates_as_adds():
+    raw_response = json.dumps(
+        {
+            "reply_text": "Quiet cafes sound right.",
+            "owner_profile_updates": ["Owner likes quiet cafes"],
+        }
+    )
+    agent = RelationshipAgent(StubClient(raw_response), PromptBuilder("Mina"))
+
+    result = asyncio.run(agent.respond(make_snapshot(), make_event()))
+
+    assert result.owner_profile_updates == [
+        MemoryUpdate(op="add", value="Owner likes quiet cafes")
+    ]
 
 
 def test_relationship_agent_uses_raw_text_and_empty_updates_for_invalid_json():

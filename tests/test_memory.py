@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from bot.memory.curator import MemoryCurator
 from bot.memory.store import MemoryStore
-from bot.models import RuntimeState
+from bot.models import MemoryUpdate, RuntimeState
 
 
 def test_memory_store_initializes_state_files_and_snapshot_defaults(tmp_path):
@@ -24,7 +24,9 @@ def test_memory_curator_appends_safe_owner_profile_memory(tmp_path):
     store = MemoryStore(tmp_path)
     curator = MemoryCurator(store)
 
-    curator.apply_updates(owner_profile_updates=[" Owner enjoys climbing. "])
+    curator.apply_updates(
+        owner_profile_updates=[MemoryUpdate(value=" Owner enjoys climbing. ")]
+    )
 
     snapshot = store.load_snapshot()
     assert "- Owner enjoys climbing." in snapshot.owner_profile
@@ -34,7 +36,11 @@ def test_memory_curator_rejects_blocked_secret_like_memory(tmp_path):
     store = MemoryStore(tmp_path)
     curator = MemoryCurator(store)
 
-    curator.apply_updates(owner_profile_updates=["api key: sk-fakeplaceholder1234567890"])
+    curator.apply_updates(
+        owner_profile_updates=[
+            MemoryUpdate(value="api key: sk-fakeplaceholder1234567890")
+        ]
+    )
 
     snapshot = store.load_snapshot()
     assert "sk-fakeplaceholder" not in snapshot.owner_profile
@@ -47,8 +53,8 @@ def test_memory_curator_normalizes_multiline_updates_and_rejects_long_entries(tm
 
     curator.apply_updates(
         owner_profile_updates=[
-            "  # Owner\n- Likes   quiet\n\n  evenings.  ",
-            "x" * 501,
+            MemoryUpdate(value="  # Owner\n- Likes   quiet\n\n  evenings.  "),
+            MemoryUpdate(value="x" * 501),
         ]
     )
 
@@ -104,8 +110,55 @@ def test_memory_curator_skips_duplicate_updates(tmp_path):
     store = MemoryStore(tmp_path)
     curator = MemoryCurator(store)
 
-    curator.apply_updates(owner_profile_updates=["Owner enjoys climbing."])
-    curator.apply_updates(owner_profile_updates=["Owner enjoys climbing."])
+    curator.apply_updates(
+        owner_profile_updates=[MemoryUpdate(value="Owner enjoys climbing.")]
+    )
+    curator.apply_updates(
+        owner_profile_updates=[MemoryUpdate(value="Owner enjoys climbing.")]
+    )
 
     snapshot = store.load_snapshot()
     assert snapshot.owner_profile.count("- Owner enjoys climbing.") == 1
+
+
+def test_memory_curator_replaces_entire_matching_owner_profile_line(tmp_path):
+    store = MemoryStore(tmp_path)
+    curator = MemoryCurator(store)
+    curator.apply_updates(
+        owner_profile_updates=[
+            MemoryUpdate(value="Owner likes morning coding with tea.")
+        ]
+    )
+
+    curator.apply_updates(
+        owner_profile_updates=[
+            MemoryUpdate(
+                op="replace",
+                find="morning coding",
+                value="Owner prefers coding at night",
+            )
+        ]
+    )
+
+    snapshot = store.load_snapshot()
+    assert "- Owner prefers coding at night" in snapshot.owner_profile
+    assert "Owner likes morning coding with tea." not in snapshot.owner_profile
+
+
+def test_memory_curator_removes_entire_matching_owner_profile_line(tmp_path):
+    store = MemoryStore(tmp_path)
+    curator = MemoryCurator(store)
+    curator.apply_updates(
+        owner_profile_updates=[
+            MemoryUpdate(value="Owner likes puzzle games."),
+            MemoryUpdate(value="Owner enjoys late-night tea."),
+        ]
+    )
+
+    curator.apply_updates(
+        owner_profile_updates=[MemoryUpdate(op="remove", find="puzzle games")]
+    )
+
+    snapshot = store.load_snapshot()
+    assert "Owner likes puzzle games." not in snapshot.owner_profile
+    assert "- Owner enjoys late-night tea." in snapshot.owner_profile

@@ -5,7 +5,13 @@ import re
 from typing import Any, Protocol
 
 from bot.agent.prompt_builder import PromptBuilder
-from bot.models import AgentResult, MemorySnapshot, MessageEvent, ProactiveDecision
+from bot.models import (
+    AgentResult,
+    MemorySnapshot,
+    MemoryUpdate,
+    MessageEvent,
+    ProactiveDecision,
+)
 from bot.safety import sanitize_discord_output
 
 
@@ -44,16 +50,16 @@ class RelationshipAgent:
 
         return AgentResult(
             reply_text=sanitize_discord_output(reply_text),
-            bot_identity_updates=self._string_list(
+            bot_identity_updates=self._memory_update_list(
                 parsed.get("bot_identity_updates")
             ),
-            owner_profile_updates=self._string_list(
+            owner_profile_updates=self._memory_update_list(
                 parsed.get("owner_profile_updates")
             ),
-            relationship_journal_updates=self._string_list(
+            relationship_journal_updates=self._memory_update_list(
                 parsed.get("relationship_journal_updates")
             ),
-            avatar_updates=self._string_list(parsed.get("avatar_updates")),
+            avatar_updates=self._memory_update_list(parsed.get("avatar_updates")),
             runtime_notes=self._string_list(parsed.get("runtime_notes")),
         )
 
@@ -135,6 +141,40 @@ class RelationshipAgent:
         if not isinstance(value, list):
             return []
         return [item for item in value if isinstance(item, str)]
+
+    def _memory_update_list(self, value: Any) -> list[MemoryUpdate]:
+        if not isinstance(value, list):
+            return []
+
+        updates: list[MemoryUpdate] = []
+        for item in value:
+            update = self._memory_update(item)
+            if update is not None:
+                updates.append(update)
+        return updates
+
+    def _memory_update(self, value: Any) -> MemoryUpdate | None:
+        if isinstance(value, str):
+            if not value:
+                return None
+            return MemoryUpdate(value=value)
+
+        if not isinstance(value, dict):
+            return None
+
+        raw_op = value.get("op")
+        op = raw_op if raw_op in {"add", "replace", "remove"} else "add"
+        raw_find = value.get("find")
+        find = raw_find if isinstance(raw_find, str) and raw_find else None
+        raw_value = value.get("value")
+        update_value = raw_value if isinstance(raw_value, str) and raw_value else ""
+
+        if op in {"replace", "remove"} and find is None:
+            return None
+        if op in {"add", "replace"} and not update_value:
+            return None
+
+        return MemoryUpdate(op=op, find=find, value=update_value)
 
     def _string_value(self, value: Any) -> str:
         if not isinstance(value, str):
