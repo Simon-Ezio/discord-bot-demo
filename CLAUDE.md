@@ -24,7 +24,7 @@ Build a minimal Discord bot that starts with no fixed identity and develops thro
 ## Project structure
 
 ```
-bot.py               # entry point
+run.py               # entry point
 src/bot/
   config.py           # BotConfig from env
   main.py             # build_runtime, amain, proactive loop
@@ -92,5 +92,5 @@ scripts/
 ```bash
 uv sync --extra dev
 cp .env.example .env
-uv run python bot.py
+uv run python run.py
 ```

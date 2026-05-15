@@ -59,7 +59,7 @@ The bot also needs Message Content Intent enabled in the Discord Developer Porta
 ## Run
 
 ```bash
-uv run python -m bot.main
+uv run python run.py
 ```
 
 Inspect local state without printing secrets:
@@ -93,7 +93,7 @@ uv run python scripts/dry_run_turn.py --message "hello" --state-dir state --use-
 1. Confirm `.env` contains the Discord token, MiniMax key, owner ID, chat channel ID, and log channel ID.
 2. Run `uv run python scripts/show_state.py --state-dir state` and confirm the state sections render.
 3. Run `uv run python scripts/dry_run_turn.py --message "test" --state-dir state` and confirm a deterministic console reply appears.
-4. Start the bot with `uv run python -m bot.main`.
+4. Start the bot with `uv run python run.py`.
 5. Send a message from `OWNER_USER_ID` in `CHAT_CHANNEL_ID`.
 6. Confirm the bot replies in the chat channel and runtime logs appear in `LOG_CHANNEL_ID`.
 7. Confirm messages from other users, DMs, and other channels are ignored.
