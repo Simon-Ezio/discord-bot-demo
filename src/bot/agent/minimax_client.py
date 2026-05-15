@@ -16,11 +16,15 @@ class MiniMaxClient:
         model: str = "",
         timeout_seconds: float = 30,
         http_client: httpx.AsyncClient | None = None,
+        proxy: str | None = None,
+        proxy_ssl_verify: bool = True,
     ) -> None:
         self._base_url = base_url
         self._model = model or DEFAULT_MINIMAX_MODEL
         self._timeout_seconds = timeout_seconds
         self._http_client = http_client
+        self._proxy = proxy
+        self._proxy_ssl_verify = proxy_ssl_verify
         self._headers = {"Authorization": f"Bearer {api_key}"}
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
@@ -36,7 +40,12 @@ class MiniMaxClient:
             response.raise_for_status()
             return self._extract_text(response.json())
 
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as http_client:
+        client_kwargs: dict[str, Any] = {"timeout": self._timeout_seconds}
+        if self._proxy:
+            client_kwargs["proxy"] = self._proxy
+        if self._proxy and not self._proxy_ssl_verify:
+            client_kwargs["verify"] = False
+        async with httpx.AsyncClient(**client_kwargs) as http_client:
             response = await http_client.post(
                 self._base_url,
                 json=payload,

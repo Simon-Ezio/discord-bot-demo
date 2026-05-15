@@ -126,6 +126,8 @@ def build_runtime(config: BotConfig) -> tuple[DiscordAdapter, BotRuntime, BotLog
         api_key=config.minimax_api_key,
         base_url=config.minimax_base_url,
         model=config.minimax_model,
+        proxy=config.proxy,
+        proxy_ssl_verify=config.proxy_ssl_verify,
     )
     prompt_builder = PromptBuilder(config.owner_username)
     agent = RelationshipAgent(client, prompt_builder)

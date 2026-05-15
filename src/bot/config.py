@@ -28,6 +28,8 @@ class BotConfig:
     proactive_min_idle_seconds: int
     proactive_max_idle_seconds: int
     state_dir: Path
+    proxy: str | None
+    proxy_ssl_verify: bool
 
     @classmethod
     def from_env(cls) -> "BotConfig":
@@ -52,6 +54,9 @@ class BotConfig:
                 "PROACTIVE_MAX_IDLE_SECONDS"
             )
 
+        proxy = _optional("PROXY", "")
+        proxy_ssl_verify = _optional("PROXY_SSL_VERIFY", "true").lower() in ("true", "1", "yes")
+
         return cls(
             discord_bot_token=discord_bot_token,
             minimax_api_key=minimax_api_key,
@@ -65,6 +70,8 @@ class BotConfig:
             proactive_min_idle_seconds=proactive_min_idle_seconds,
             proactive_max_idle_seconds=proactive_max_idle_seconds,
             state_dir=Path(_optional("STATE_DIR", "state")),
+            proxy=proxy or None,
+            proxy_ssl_verify=proxy_ssl_verify,
         )
 
 

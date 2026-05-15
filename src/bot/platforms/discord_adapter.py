@@ -16,6 +16,8 @@ class DiscordAdapterConfig(Protocol):
     owner_user_id: str
     chat_channel_id: str
     log_channel_id: str
+    proxy: str | None
+    proxy_ssl_verify: bool
 
 
 class MessageRuntime(Protocol):
@@ -146,9 +148,24 @@ class DiscordAdapter:
 
     def _make_client(self) -> Any:
         assert discord is not None
+        import ssl
+
+        import aiohttp
+
         intents = discord.Intents.default()
         intents.message_content = True
-        client = discord.Client(intents=intents, allowed_mentions=self.allowed_mentions)
+        client_kwargs: dict[str, Any] = {
+            "intents": intents,
+            "allowed_mentions": self.allowed_mentions,
+        }
+        if self.config.proxy:
+            client_kwargs["proxy"] = self.config.proxy
+        if self.config.proxy and not self.config.proxy_ssl_verify:
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            client_kwargs["connector"] = aiohttp.TCPConnector(limit=0, ssl=ssl_ctx)
+        client = discord.Client(**client_kwargs)
 
         @client.event
         async def on_message(message: Any) -> None:

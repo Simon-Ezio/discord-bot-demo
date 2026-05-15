@@ -61,6 +61,8 @@ def test_dry_run_agent_is_default_even_when_minimax_key_exists(tmp_path):
         proactive_min_idle_seconds=300,
         proactive_max_idle_seconds=900,
         state_dir=Path(tmp_path),
+        proxy=None,
+        proxy_ssl_verify=True,
     )
 
     agent = dry_run_turn.build_agent(config, use_minimax=False)
