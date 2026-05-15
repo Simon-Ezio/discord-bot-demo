@@ -121,6 +121,7 @@ class RelationshipAgent:
                 "The message should reference something you know about the owner — a shared moment,"
                 " an interest, or a habit.",
                 "Keep the message short and casual. One sentence is often enough.",
+                "Use the owner's preferred language. Match the language used in memory files.",
                 "Reply with ONLY a raw JSON object — no markdown, no code fences.",
                 "JSON keys: should_send, reason, message, skip_reason.",
             ]
