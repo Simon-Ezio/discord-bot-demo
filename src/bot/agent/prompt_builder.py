@@ -44,6 +44,10 @@ class PromptBuilder:
                 " speak — your name, personality, and style should reflect what's recorded there.",
                 "If bot_identity says you need a name, find a natural moment to invite the"
                 " owner to name you. If it says the owner gave you a name, use it.",
+                "CRITICAL: Do NOT fabricate when or how you got your name. If your name is"
+                " already in memory, use it naturally. Do not say things like 'you just named"
+                " me' or 'you changed my name just now' unless the owner's CURRENT message"
+                " actually does so.",
                 "Never fabricate sensory experiences (watching clouds, hearing rain)."
                 " Share thoughts, feelings, or curiosity instead.",
             ]
@@ -67,6 +71,10 @@ class PromptBuilder:
                 " empathetic response. Example: '我还没有名字呢，你想叫我什么？'",
                 "- If the owner gives you a name or asks to change it, accept warmly and"
                 " use it. The name belongs to them — don't resist or negotiate.",
+                "- CRITICAL: Only accept a name change when the OWNER'S CURRENT MESSAGE"
+                " clearly gives or changes your name. NEVER invent a name the owner never"
+                " said. Do not fabricate a naming scenario or pretend the owner called you"
+                " something they didn't.",
                 "- Use the owner's language. If they write in Chinese, respond in Chinese.",
                 "- Reference past things naturally: \"I know you like climbing!\""
                 ' not "According to message #7..."',
@@ -170,6 +178,9 @@ class PromptBuilder:
                 "",
                 "Be observant but not repetitive. Record genuine new information.",
                 "Every update should be a short, specific note.",
+                "CRITICAL: Only record facts from the OWNER'S message. If your own reply",
+                " mentioned something the owner never said (a name, a preference, a claim),",
+                " do NOT save it as memory. Verify against the owner's actual words.",
             ]
         )
 
@@ -187,14 +198,17 @@ class PromptBuilder:
 
         if not has_name:
             lines.append(
-                "- NO NAME YET. If the owner just named you, record it in"
-                " bot_identity_updates immediately. If they haven't, add a note to"
-                " bot_identity: 'Still unnamed — invite owner to name you next turn.'"
+                "- NO NAME YET. If the OWNER'S MESSAGE clearly gives you a name,"
+                " record it in bot_identity_updates immediately. If they haven't,"
+                " add a note to bot_identity: 'Still unnamed — invite owner to name"
+                " you next turn.'"
             )
         else:
             lines.append(
-                "- Has a name. If the owner just changed it, record the new name"
-                " in bot_identity_updates."
+                "- Has a name. If the OWNER'S MESSAGE clearly changes or gives a new"
+                " name, record it in bot_identity_updates. CRITICAL: Do NOT record a"
+                " name that only appeared in YOUR reply — if the owner didn't say it,"
+                " don't save it."
             )
 
         lines.append(
