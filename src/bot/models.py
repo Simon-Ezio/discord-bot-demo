@@ -92,6 +92,29 @@ class RuntimeState:
         )
 
 
+@dataclass(frozen=True)
+class ConversationEntry:
+    role: str
+    content: str
+    timestamp: datetime
+
+    def to_json(self) -> dict[str, str]:
+        return {
+            "role": self.role,
+            "content": self.content,
+            "timestamp": _datetime_to_json(self.timestamp) or "",
+        }
+
+    @classmethod
+    def from_json(cls, data: dict[str, object]) -> "ConversationEntry":
+        role = str(data.get("role", ""))
+        if role not in {"owner", "bot"}:
+            role = "owner"
+        content = str(data.get("content", ""))
+        timestamp = _datetime_from_json(data.get("timestamp")) or datetime.now()
+        return cls(role=role, content=content, timestamp=timestamp)
+
+
 @dataclass
 class MemorySnapshot:
     bot_identity: str
@@ -99,6 +122,7 @@ class MemorySnapshot:
     relationship_journal: str
     avatar_prompt: str
     runtime_state: RuntimeState
+    conversation_history: list[ConversationEntry] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

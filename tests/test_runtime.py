@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from bot.models import (
     AgentResult,
     AttachmentInfo,
+    ConversationEntry,
     MemorySnapshot,
     MemoryUpdate,
     MessageEvent,
@@ -18,12 +19,19 @@ class FakeStore:
         self.snapshot = snapshot
         self.saved_runtime_state = None
         self.attachment_metadata = []
+        self.history = []
 
     def load_snapshot(self) -> MemorySnapshot:
         return self.snapshot
 
     def save_runtime_state(self, state: RuntimeState) -> None:
         self.saved_runtime_state = state
+
+    def load_conversation_history(self) -> list[ConversationEntry]:
+        return self.history
+
+    def save_conversation_history(self, history: list[ConversationEntry]) -> None:
+        self.history = history
 
     def save_attachment_metadata(self, filename: str, source_url: str):
         self.attachment_metadata.append((filename, source_url))
@@ -172,6 +180,24 @@ def test_handle_message_replies_updates_runtime_state_and_logs_safe_summary():
     ]
     assert "secret" not in logger.info_messages[0].lower()
     assert "raw prompt" not in logger.info_messages[0].lower()
+
+
+def test_handle_message_saves_owner_and_bot_entries_to_history():
+    snapshot = make_snapshot()
+    store = FakeStore(snapshot)
+    curator = FakeCurator()
+    agent = FakeAgent(AgentResult(reply_text="I heard you."))
+    adapter = FakeAdapter()
+    logger = FakeLogger()
+    runtime = BotRuntime(store, curator, agent, adapter, logger)
+    event = make_event()
+
+    asyncio.run(runtime.handle_message(event))
+
+    assert [entry.role for entry in store.history] == ["owner", "bot"]
+    assert store.history[0].content == event.content
+    assert store.history[0].timestamp == event.created_at
+    assert store.history[1].content == "I heard you."
 
 
 def test_handle_message_sends_fallback_and_skips_updates_when_agent_fails():

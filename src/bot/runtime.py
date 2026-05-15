@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Protocol
 
 from bot.agent.relationship_agent import FALLBACK_REPLY
 from bot.models import (
     AgentResult,
+    ConversationEntry,
     MemorySnapshot,
     MemoryUpdate,
     MessageEvent,
@@ -17,6 +19,10 @@ class SnapshotStore(Protocol):
     def load_snapshot(self) -> MemorySnapshot: ...
 
     def save_runtime_state(self, state: RuntimeState) -> None: ...
+
+    def load_conversation_history(self) -> list[ConversationEntry]: ...
+
+    def save_conversation_history(self, history: list[ConversationEntry]) -> None: ...
 
     def save_attachment_metadata(self, filename: str, source_url: str): ...
 
@@ -81,6 +87,28 @@ class BotRuntime:
         reply_text = sanitize_discord_output(result.reply_text)
         if not await self._safe_send_chat(reply_text, event):
             return
+
+        try:
+            history = [
+                *self._store.load_conversation_history(),
+                ConversationEntry(
+                    role="owner",
+                    content=event.content,
+                    timestamp=event.created_at,
+                ),
+                ConversationEntry(
+                    role="bot",
+                    content=reply_text,
+                    timestamp=datetime.now(UTC),
+                ),
+            ]
+            self._store.save_conversation_history(history)
+        except Exception as exc:
+            await self._logger.error(
+                "failed saving conversation history "
+                f"message_id={event.message_id} "
+                f"error_type={type(exc).__name__}"
+            )
 
         avatar_updates = [
             *result.avatar_updates,

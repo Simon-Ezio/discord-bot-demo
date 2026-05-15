@@ -10,7 +10,7 @@ from bot.agent.relationship_agent import RelationshipAgent
 from bot.config import BotConfig
 from bot.memory.curator import MemoryCurator
 from bot.memory.store import MemoryStore
-from bot.models import ProactiveDecision
+from bot.models import ConversationEntry, ProactiveDecision
 from bot.observability.bot_logger import BotLogger
 from bot.platforms.discord_adapter import DiscordAdapter
 from bot.runtime import BotRuntime
@@ -55,6 +55,7 @@ async def run_proactive_tick(
 
     try:
         await adapter.send_chat(decision.message)
+        await _save_proactive_history(store, logger, decision.message, current_time)
         await _save_proactive_state(
             store,
             logger,
@@ -95,6 +96,25 @@ async def _save_proactive_state(
     except Exception as exc:
         await logger.error(
             "failed saving proactive runtime state "
+            f"error_type={type(exc).__name__}"
+        )
+
+
+async def _save_proactive_history(
+    store: MemoryStore,
+    logger: BotLogger,
+    message: str,
+    now: datetime,
+) -> None:
+    try:
+        history = [
+            *store.load_conversation_history(),
+            ConversationEntry(role="bot", content=message, timestamp=now),
+        ]
+        store.save_conversation_history(history)
+    except Exception as exc:
+        await logger.error(
+            "failed saving proactive conversation history "
             f"error_type={type(exc).__name__}"
         )
 

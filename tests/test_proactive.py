@@ -3,7 +3,13 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from bot.agent import PromptBuilder, RelationshipAgent
-from bot.models import MemorySnapshot, ProactiveDecision, RuntimeState
+from bot.main import run_proactive_tick
+from bot.models import (
+    ConversationEntry,
+    MemorySnapshot,
+    ProactiveDecision,
+    RuntimeState,
+)
 from bot.scheduler import ProactivePlanner, ProactivePolicy, apply_proactive_sent
 
 
@@ -192,3 +198,72 @@ def test_planner_with_real_agent_allows_after_backoff_expires():
     assert decision.should_send is True
     assert decision.reason == "after backoff"
     assert decision.message == "Still around if you want to talk."
+
+
+class ProactiveStore:
+    def __init__(self, snapshot: MemorySnapshot) -> None:
+        self.snapshot = snapshot
+        self.saved_runtime_state = None
+        self.history = []
+
+    def load_snapshot(self) -> MemorySnapshot:
+        return self.snapshot
+
+    def load_conversation_history(self) -> list[ConversationEntry]:
+        return self.history
+
+    def save_conversation_history(self, history: list[ConversationEntry]) -> None:
+        self.history = history
+
+    def save_runtime_state(self, state: RuntimeState) -> None:
+        self.saved_runtime_state = state
+
+
+class ProactiveAdapter:
+    def __init__(self) -> None:
+        self.chat_messages = []
+
+    async def send_chat(self, text: str) -> None:
+        self.chat_messages.append(text)
+
+
+class ProactiveLogger:
+    def __init__(self) -> None:
+        self.info_messages = []
+        self.error_messages = []
+
+    async def info(self, message: str) -> None:
+        self.info_messages.append(message)
+
+    async def error(self, message: str) -> None:
+        self.error_messages.append(message)
+
+
+def test_run_proactive_tick_saves_sent_bot_message_to_history():
+    decision = ProactiveDecision(
+        should_send=True,
+        reason="quiet moment",
+        message="Still around if you want to talk.",
+    )
+    snapshot = make_snapshot(make_state())
+    store = ProactiveStore(snapshot)
+    agent = StubAgent(decision)
+    adapter = ProactiveAdapter()
+    logger = ProactiveLogger()
+
+    asyncio.run(
+        run_proactive_tick(
+            store=store,
+            agent=agent,
+            adapter=adapter,
+            logger=logger,
+            min_idle_seconds=60,
+            max_idle_seconds=300,
+            now=NOW,
+        )
+    )
+
+    assert adapter.chat_messages == [decision.message]
+    assert [entry.role for entry in store.history] == ["bot"]
+    assert store.history[0].content == decision.message
+    assert store.history[0].timestamp == NOW

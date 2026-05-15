@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from bot.memory.curator import MemoryCurator
 from bot.memory.store import MemoryStore
-from bot.models import MemoryUpdate, RuntimeState
+from bot.models import ConversationEntry, MemoryUpdate, RuntimeState
 
 
 def test_memory_store_initializes_state_files_and_snapshot_defaults(tmp_path):
@@ -89,6 +89,38 @@ def test_runtime_state_load_degrades_gracefully_when_json_is_corrupt(tmp_path):
 
     assert snapshot.runtime_state == RuntimeState()
     assert runtime_path.read_text(encoding="utf-8").startswith("{")
+
+
+def test_conversation_history_save_load_round_trips_entries(tmp_path):
+    store = MemoryStore(tmp_path)
+    entry = ConversationEntry(
+        role="owner",
+        content="你好",
+        timestamp=datetime(2026, 5, 13, 12, 0, tzinfo=timezone.utc),
+    )
+
+    store.save_conversation_history([entry])
+
+    assert store.load_conversation_history() == [entry]
+
+
+def test_conversation_history_save_truncates_to_last_ten_messages(tmp_path):
+    store = MemoryStore(tmp_path)
+    entries = [
+        ConversationEntry(
+            role="owner",
+            content=f"message {index}",
+            timestamp=datetime(2026, 5, 13, 12, index, tzinfo=timezone.utc),
+        )
+        for index in range(12)
+    ]
+
+    store.save_conversation_history(entries)
+
+    history = store.load_conversation_history()
+    assert len(history) == 10
+    assert history[0].content == "message 2"
+    assert history[-1].content == "message 11"
 
 
 def test_attachment_metadata_uses_unique_paths_for_repeated_filenames(tmp_path):

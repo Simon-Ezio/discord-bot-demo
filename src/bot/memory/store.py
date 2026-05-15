@@ -6,7 +6,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from bot.models import MemorySnapshot, RuntimeState
+from bot.models import ConversationEntry, MemorySnapshot, RuntimeState
 
 
 DEFAULT_BOT_IDENTITY = (
@@ -17,6 +17,8 @@ DEFAULT_BOT_IDENTITY = (
 DEFAULT_OWNER_PROFILE = "# Owner Profile\n"
 DEFAULT_RELATIONSHIP_JOURNAL = "# Relationship Journal\n"
 DEFAULT_AVATAR_PROMPT = "# Avatar Prompt\n"
+MAX_CONVERSATION_HISTORY_MESSAGES = 10
+CONVERSATION_HISTORY_FILE = "conversation_history.json"
 
 
 class MemoryStore:
@@ -32,6 +34,7 @@ class MemoryStore:
             relationship_journal=self._read_markdown("relationship_journal.md"),
             avatar_prompt=self._read_markdown("avatar_prompt.md"),
             runtime_state=self._load_runtime_state(),
+            conversation_history=self.load_conversation_history(),
         )
 
     def append_markdown(self, path_name: str, entries: list[str]) -> None:
@@ -54,6 +57,40 @@ class MemoryStore:
         self._ensure_state_files()
         content = json.dumps(state.to_json(), indent=2, sort_keys=True) + "\n"
         self._atomic_write(self.state_dir / "runtime_state.json", content)
+
+    def load_conversation_history(self) -> list[ConversationEntry]:
+        self._ensure_state_files()
+        path = self.state_dir / CONVERSATION_HISTORY_FILE
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+
+        if not isinstance(data, list):
+            return []
+
+        history: list[ConversationEntry] = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            try:
+                history.append(ConversationEntry.from_json(item))
+            except (TypeError, ValueError):
+                continue
+        return history[-MAX_CONVERSATION_HISTORY_MESSAGES:]
+
+    def save_conversation_history(self, history: list[ConversationEntry]) -> None:
+        self._ensure_state_files()
+        capped_history = history[-MAX_CONVERSATION_HISTORY_MESSAGES:]
+        content = (
+            json.dumps(
+                [entry.to_json() for entry in capped_history],
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
+        )
+        self._atomic_write(self.state_dir / CONVERSATION_HISTORY_FILE, content)
 
     def save_attachment_metadata(self, filename: str, source_url: str) -> Path:
         self._ensure_state_files()
@@ -89,6 +126,10 @@ class MemoryStore:
         runtime_path = self.state_dir / "runtime_state.json"
         if not runtime_path.exists():
             self._atomic_write(runtime_path, json.dumps(RuntimeState().to_json()) + "\n")
+
+        history_path = self.state_dir / CONVERSATION_HISTORY_FILE
+        if not history_path.exists():
+            self._atomic_write(history_path, "[]\n")
 
     def _read_markdown(self, path_name: str) -> str:
         return self._state_file(path_name).read_text(encoding="utf-8")
