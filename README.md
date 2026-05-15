@@ -80,6 +80,14 @@ To explicitly test the real MiniMax path from the dry-run script, pass `--use-mi
 uv run python scripts/dry_run_turn.py --message "hello" --state-dir state --use-minimax
 ```
 
+## Architecture
+
+- Memory files: `bot_identity.md`, `owner_profile.md`, `relationship_journal.md`, `avatar_prompt.md`
+- Recent history: `conversation_history.json`, capped to the last 10 messages
+- Proactive runtime: `runtime_state.json`
+- Prompt design: layered identity, behavior rules, stage guidance, memory snapshot, recent history, current message
+- Failure handling: invalid LLM JSON falls back to sanitized text or a short fallback reply
+
 ## Manual Verification
 
 1. Confirm `.env` contains the Discord token, MiniMax key, owner ID, chat channel ID, and log channel ID.
