@@ -162,3 +162,44 @@ def test_memory_curator_removes_entire_matching_owner_profile_line(tmp_path):
     snapshot = store.load_snapshot()
     assert "Owner likes puzzle games." not in snapshot.owner_profile
     assert "- Owner enjoys late-night tea." in snapshot.owner_profile
+
+
+def test_memory_curator_ignores_remove_with_blank_find(tmp_path):
+    store = MemoryStore(tmp_path)
+    curator = MemoryCurator(store)
+    store.replace_markdown(
+        "owner_profile.md",
+        "# Owner Profile\n- Owner   likes puzzle games.\n- Owner enjoys late-night tea.\n",
+    )
+
+    curator.apply_updates(
+        owner_profile_updates=[MemoryUpdate(op="remove", find="   ")]
+    )
+
+    snapshot = store.load_snapshot()
+    assert "- Owner   likes puzzle games." in snapshot.owner_profile
+    assert "- Owner enjoys late-night tea." in snapshot.owner_profile
+
+
+def test_memory_curator_ignores_replace_with_blank_find(tmp_path):
+    store = MemoryStore(tmp_path)
+    curator = MemoryCurator(store)
+    curator.apply_updates(
+        owner_profile_updates=[
+            MemoryUpdate(value="Owner likes morning coding with tea.")
+        ]
+    )
+
+    curator.apply_updates(
+        owner_profile_updates=[
+            MemoryUpdate(
+                op="replace",
+                find="   ",
+                value="Owner prefers coding at night",
+            )
+        ]
+    )
+
+    snapshot = store.load_snapshot()
+    assert "- Owner likes morning coding with tea." in snapshot.owner_profile
+    assert "Owner prefers coding at night" not in snapshot.owner_profile

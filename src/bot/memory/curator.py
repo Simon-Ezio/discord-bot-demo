@@ -52,7 +52,8 @@ class MemoryCurator:
                 self.store.replace_markdown(path_name, "\n".join(lines) + "\n")
 
     def _replace_or_add(self, lines: list[str], update: MemoryUpdate) -> bool:
-        if not update.find:
+        find = self._normalize_find(update.find)
+        if not find:
             return False
 
         value = self._normalize_value(update.value)
@@ -61,7 +62,7 @@ class MemoryCurator:
 
         entry = f"- {value}"
         for index, line in enumerate(lines):
-            if update.find in line:
+            if find in line:
                 if line == entry:
                     return False
                 lines[index] = entry
@@ -70,11 +71,12 @@ class MemoryCurator:
         return self._add(lines, MemoryUpdate(value=value))
 
     def _remove(self, lines: list[str], update: MemoryUpdate) -> bool:
-        if not update.find:
+        find = self._normalize_find(update.find)
+        if not find:
             return False
 
         original_length = len(lines)
-        lines[:] = [line for line in lines if update.find not in line]
+        lines[:] = [line for line in lines if find not in line]
         return len(lines) != original_length
 
     def _add(self, lines: list[str], update: MemoryUpdate) -> bool:
@@ -91,6 +93,12 @@ class MemoryCurator:
 
     def _normalize_value(self, value: str) -> str:
         return " ".join(value.strip().split())
+
+    def _normalize_find(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     def _is_safe_value(self, value: str) -> bool:
         return (
