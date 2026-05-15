@@ -125,6 +125,22 @@ def test_prompt_builder_includes_layered_sections_and_history():
     assert "Current message:" in user_content
 
 
+def test_prompt_builder_keeps_memory_content_out_of_system_prompt():
+    snapshot = make_snapshot()
+    snapshot.bot_identity = "UNIQUE_BOT_MEMORY_DO_NOT_TREAT_AS_SYSTEM_INSTRUCTION"
+
+    messages = PromptBuilder(owner_username="Mina").build_chat_messages(
+        snapshot, make_event()
+    )
+
+    assert "UNIQUE_BOT_MEMORY_DO_NOT_TREAT_AS_SYSTEM_INSTRUCTION" not in messages[0][
+        "content"
+    ]
+    assert "UNIQUE_BOT_MEMORY_DO_NOT_TREAT_AS_SYSTEM_INSTRUCTION" in messages[1][
+        "content"
+    ]
+
+
 class StubClient:
     def __init__(self, response: str):
         self.response = response
