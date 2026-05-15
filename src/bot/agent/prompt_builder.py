@@ -47,7 +47,9 @@ class PromptBuilder:
             "Reply with ONLY a raw JSON object — no markdown, no code fences, no extra text.",
             "JSON keys: reply_text, bot_identity_updates, owner_profile_updates, "
             "relationship_journal_updates, avatar_updates, runtime_notes.",
-            "Each update field must be an array of short memory notes. Empty arrays are fine.",
+            "Update fields may contain legacy strings or structured objects with op, value, and find.",
+            "Use op=add with value for new memories; replace/remove require find; replace also requires value.",
+            "Each update field must be an array of short memory notes or update objects. Empty arrays are fine.",
         ]
 
         system_content = "\n".join(system_parts)

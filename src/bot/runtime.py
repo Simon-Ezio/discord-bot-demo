@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Protocol
 
 from bot.agent.relationship_agent import FALLBACK_REPLY
-from bot.models import AgentResult, MemorySnapshot, MessageEvent, RuntimeState
+from bot.models import (
+    AgentResult,
+    MemorySnapshot,
+    MemoryUpdate,
+    MessageEvent,
+    RuntimeState,
+)
 from bot.safety import sanitize_discord_output
 
 
@@ -19,10 +25,10 @@ class MemoryUpdateCurator(Protocol):
     def apply_updates(
         self,
         *,
-        bot_identity_updates: list[str] | None = None,
-        owner_profile_updates: list[str] | None = None,
-        relationship_journal_updates: list[str] | None = None,
-        avatar_updates: list[str] | None = None,
+        bot_identity_updates: list[MemoryUpdate] | None = None,
+        owner_profile_updates: list[MemoryUpdate] | None = None,
+        relationship_journal_updates: list[MemoryUpdate] | None = None,
+        avatar_updates: list[MemoryUpdate] | None = None,
     ) -> None: ...
 
 
@@ -135,8 +141,8 @@ class BotRuntime:
             return False
         return True
 
-    def _persist_attachment_references(self, event: MessageEvent) -> list[str]:
-        updates: list[str] = []
+    def _persist_attachment_references(self, event: MessageEvent) -> list[MemoryUpdate]:
+        updates: list[MemoryUpdate] = []
         for attachment in event.attachments:
             if not attachment.is_image:
                 continue
@@ -151,8 +157,12 @@ class BotRuntime:
             except Exception:
                 continue
             updates.append(
-                "Image attachment available for avatar consideration: "
-                f"filename={attachment.filename}; source={source}; "
-                f"metadata={metadata_path}"
+                MemoryUpdate(
+                    value=(
+                        "Image attachment available for avatar consideration: "
+                        f"filename={attachment.filename}; source={source}; "
+                        f"metadata={metadata_path}"
+                    )
+                )
             )
         return updates

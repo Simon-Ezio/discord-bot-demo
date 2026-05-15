@@ -165,7 +165,9 @@ class RelationshipAgent:
         raw_op = value.get("op")
         op = raw_op if raw_op in {"add", "replace", "remove"} else "add"
         raw_find = value.get("find")
-        find = raw_find if isinstance(raw_find, str) and raw_find else None
+        find = raw_find.strip() if isinstance(raw_find, str) else None
+        if not find:
+            find = None
         raw_value = value.get("value")
         update_value = raw_value if isinstance(raw_value, str) and raw_value else ""
 

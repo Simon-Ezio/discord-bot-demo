@@ -1,7 +1,14 @@
 import asyncio
 from datetime import datetime, timezone
 
-from bot.models import AgentResult, AttachmentInfo, MemorySnapshot, MessageEvent, RuntimeState
+from bot.models import (
+    AgentResult,
+    AttachmentInfo,
+    MemorySnapshot,
+    MemoryUpdate,
+    MessageEvent,
+    RuntimeState,
+)
 from bot.observability.bot_logger import BotLogger
 from bot.runtime import BotRuntime
 
@@ -34,6 +41,13 @@ class FakeCurator:
 
     def apply_updates(self, **updates):
         self.calls.append(updates)
+
+
+class MemoryUpdateAssertingCurator(FakeCurator):
+    def apply_updates(self, **updates):
+        avatar_updates = updates.get("avatar_updates") or []
+        assert all(isinstance(update, MemoryUpdate) for update in avatar_updates)
+        super().apply_updates(**updates)
 
 
 class FailingCurator(FakeCurator):
@@ -126,10 +140,10 @@ def test_handle_message_replies_updates_runtime_state_and_logs_safe_summary():
     agent = FakeAgent(
         AgentResult(
             reply_text="Hi @everyone, I heard you.",
-            bot_identity_updates=["Bot learned something."],
-            owner_profile_updates=["Owner shared a detail."],
-            relationship_journal_updates=["They talked today."],
-            avatar_updates=["Add a green scarf."],
+            bot_identity_updates=[MemoryUpdate(value="Bot learned something.")],
+            owner_profile_updates=[MemoryUpdate(value="Owner shared a detail.")],
+            relationship_journal_updates=[MemoryUpdate(value="They talked today.")],
+            avatar_updates=[MemoryUpdate(value="Add a green scarf.")],
         )
     )
     adapter = FakeAdapter()
@@ -143,10 +157,10 @@ def test_handle_message_replies_updates_runtime_state_and_logs_safe_summary():
     assert adapter.chat_messages == ["Hi @\u200beveryone, I heard you."]
     assert curator.calls == [
         {
-            "bot_identity_updates": ["Bot learned something."],
-            "owner_profile_updates": ["Owner shared a detail."],
-            "relationship_journal_updates": ["They talked today."],
-            "avatar_updates": ["Add a green scarf."],
+            "bot_identity_updates": [MemoryUpdate(value="Bot learned something.")],
+            "owner_profile_updates": [MemoryUpdate(value="Owner shared a detail.")],
+            "relationship_journal_updates": [MemoryUpdate(value="They talked today.")],
+            "avatar_updates": [MemoryUpdate(value="Add a green scarf.")],
         }
     ]
     assert snapshot.runtime_state.last_owner_message_at == event.created_at
@@ -224,7 +238,7 @@ def test_handle_message_logs_persistence_failures_after_reply():
 def test_handle_message_persists_image_attachment_references_to_avatar_updates():
     snapshot = make_snapshot()
     store = FakeStore(snapshot)
-    curator = FakeCurator()
+    curator = MemoryUpdateAssertingCurator()
     agent = FakeAgent(AgentResult(reply_text="hello"))
     adapter = FakeAdapter()
     logger = FakeLogger()
@@ -237,8 +251,9 @@ def test_handle_message_persists_image_attachment_references_to_avatar_updates()
     ]
     avatar_updates = curator.calls[0]["avatar_updates"]
     assert len(avatar_updates) == 1
-    assert "avatar.png" in avatar_updates[0]
-    assert "state/attachments/msg-2-avatar.png" in avatar_updates[0]
+    assert isinstance(avatar_updates[0], MemoryUpdate)
+    assert "avatar.png" in avatar_updates[0].value
+    assert "state/attachments/msg-2-avatar.png" in avatar_updates[0].value
 
 
 class FailingLogAdapter:
