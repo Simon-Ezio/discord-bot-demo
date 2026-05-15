@@ -1,4 +1,4 @@
-# Hermes-lite Discord Relationship Bot
+# Discord Relationship Bot
 
 一个极简的 Discord 陪伴机器人。启动时对自身和主人一无所知，通过自然对话逐步形成身份、记忆和关系，并将一切持久化到本地文件中。
 
