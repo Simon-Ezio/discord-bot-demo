@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from bot.config import DEFAULT_MINIMAX_BASE_URL, BotConfig, ConfigError  # noqa: E402
 from bot.memory.curator import MemoryCurator  # noqa: E402
 from bot.memory.store import MemoryStore  # noqa: E402
-from bot.models import AgentResult, MessageEvent  # noqa: E402
+from bot.models import AgentResult, MemoryUpdate, MessageEvent  # noqa: E402
 from bot.runtime import BotRuntime  # noqa: E402
 
 
@@ -37,7 +37,9 @@ class DryRunAgent:
         return AgentResult(
             reply_text=f"Dry run received: {event.content}",
             relationship_journal_updates=[
-                f"Dry-run synthetic message at {event.created_at.isoformat()}"
+                MemoryUpdate(
+                    value=f"Dry-run synthetic message at {event.created_at.isoformat()}"
+                )
             ],
         )
 

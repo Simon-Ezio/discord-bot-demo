@@ -162,15 +162,36 @@ In `ProactivePolicy.precheck()`, accept a `stage` parameter:
 
 The `RelationshipAgent` or `main.py` determines the stage by checking if `snapshot.bot_identity == DEFAULT_BOT_IDENTITY` or `snapshot.owner_profile == DEFAULT_OWNER_PROFILE`, similar to the prompt builder logic.
 
-## 5. What We Are NOT Changing
+## 5. Proactive Interval Configurable for Development
+
+**Current**: `PROACTIVE_CHECK_SECONDS` is hardcoded as an env var with default 60 seconds. To test proactive behavior, you have to wait the full idle periods.
+
+**New**: Add two convenience env vars for faster iteration:
+
+- `PROACTIVE_EARLY_IDLE_SECONDS` — min_idle for early stage (default: 150, half of `PROACTIVE_MIN_IDLE_SECONDS`)
+- `PROACTIVE_BACKOFF_CAP_SECONDS` — max backoff wait (default: 7200 = 2 hours)
+
+Additionally, all proactive timing defaults are clearly documented in `.env.example` so developers can tune them without reading source code.
+
+For quick testing, set:
+```
+PROACTIVE_CHECK_SECONDS=10
+PROACTIVE_MIN_IDLE_SECONDS=30
+PROACTIVE_MAX_IDLE_SECONDS=86400
+PROACTIVE_EARLY_IDLE_SECONDS=15
+PROACTIVE_BACKOFF_CAP_SECONDS=60
+```
+
+This lets you see proactive messages within seconds during development.
+
+## 6. What We Are NOT Changing
 
 - Discord adapter (already works well)
 - MiniMax client (already works, proxy support added)
 - Safety module (already adequate)
 - Models other than `AgentResult` and `MemoryUpdate` (minimal disruption)
-- `.env` configuration structure (only changing default values for proactive timing)
 
-## 6. File Change Summary
+## 7. File Change Summary
 
 | File | Change |
 |---|---|
